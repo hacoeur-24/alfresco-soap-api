@@ -1,0 +1,28 @@
+{
+  "devDependencies": {
+    "@types/express": "^4.17.23",
+    "@types/node": "^20.19.4",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.3"
+  },
+  "name": "alfresco-soap-demo",
+  "version": "1.0.0",
+  "description": "Alfresco SOAP SDK demo with Express backend and React frontend.",
+  "main": "dist/server.js",
+  "dependencies": {
+    "dotenv": "^16.6.1",
+    "express": "^4.21.2",
+    "soap": "^1.1.12",
+    "xmlbuilder2": "^3.1.1"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "dev": "ts-node src/server.ts",
+    "client:dev": "cd webapp && npm run dev",
+    "client:build": "cd webapp && npm run build"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
