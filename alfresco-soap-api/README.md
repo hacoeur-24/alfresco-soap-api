@@ -12,8 +12,8 @@ A TypeScript library for connecting to Alfresco Content Services via the SOAP AP
 - **Consistent, normalized return values** for all methods (always arrays/objects, never SOAP-wrapped responses)
 - **Navigate the full Alfresco folder structure**: `getChildren` now works for any nodeRef, not just Company Home
 - **Robust recursive path resolution**: `getChildren` can traverse all folders and subfolders, making it ideal for migration and full repository traversal
-- **Automatic nodeRef normalization**: All nodeRefs are parsed and passed to the Alfresco SOAP API in the correct `{ scheme, address, id }` format, so you never have to worry about SOAP compatibility
-- **WSDL-compliant get method**: The library's `get` method uses the correct Predicate structure (`{ where: { nodes: [ { store, id } ] } }`) for all node lookups, matching the Alfresco RepositoryService WSDL
+- **Automatic nodeRef normalization**: All nodeRefs are parsed and passed to the Alfresco SOAP API in the correct `{ scheme, address, uuid }` format, so you never have to worry about SOAP compatibility
+- **WSDL-compliant get method**: The library's `get` method uses the correct Predicate structure (`{ where: { nodes: [ { store, uuid } ] } }`) for all node lookups, matching the Alfresco RepositoryService WSDL
 
 ## Installation
 
@@ -63,8 +63,8 @@ Alfresco's SOAP API does not provide a direct way to fetch children for any node
 - This path is then used in a Lucene query to fetch children, enabling navigation and traversal for all folders, subfolders, and files.
 - This approach is industry standard for Alfresco integrations and is essential for migration, export, and deep traversal use cases.
 - The implementation includes defensive checks, logging, and a recursion limit to prevent infinite loops and help debug edge cases.
-- **NodeRef normalization:** The library automatically parses nodeRefs and passes them to the Alfresco SOAP API in the correct `{ scheme, address, id }` format for all navigation and migration operations.
-- **WSDL compliance:** The library's `get` method always uses the correct Predicate structure as required by the Alfresco RepositoryService WSDL.
+- **NodeRef normalization:** The library automatically parses nodeRefs and passes them to the Alfresco SOAP API in the correct `{ scheme, address, uuid }` format for all navigation and migration operations.
+- **WSDL compliance:** The library's `get` method always uses the correct Predicate structure as required by the Alfresco RepositoryService WSDL (see below).
 
 ## Troubleshooting
 
@@ -73,7 +73,7 @@ Alfresco's SOAP API does not provide a direct way to fetch children for any node
 - If you hit the recursion limit, your repository may have a circular parent reference or be corrupted.
 - For migration or export, always check logs for any skipped or errored nodes.
 - **NodeRef format:** If you see errors about invalid nodeRef format, ensure you are passing nodeRefs in the form `workspace://SpacesStore/UUID`. The library will handle parsing and SOAP compatibility internally.
-- **WSDL compliance:** If you are customizing the library or using advanced features, refer to the Alfresco RepositoryService WSDL. The library's `get` method always uses `{ where: { nodes: [ { store, id } ] } }` for node lookups, as required by Alfresco SOAP.
+- **WSDL compliance:** If you are customizing the library or using advanced features, refer to the Alfresco RepositoryService WSDL. The library's `get` method always uses `{ where: { nodes: [ { store, uuid } ] } }` for node lookups, as required by Alfresco SOAP.
 
 ## Notes
 - This package is **Node.js only**. Do not import it in browser code.

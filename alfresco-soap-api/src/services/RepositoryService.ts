@@ -36,7 +36,7 @@ export class RepositoryService extends SoapService {
     if (!scheme || !address || !id) {
       throw new Error('Invalid nodeRef format: ' + nodeRef);
     }
-    const where = { nodes: [ { store: { scheme, address }, id } ] };
+    const where = { nodes: [ { store: { scheme, address }, uuid: id } ] };
     const result = await this.call('get', { where });
     if (result && result.getReturn && Array.isArray(result.getReturn) && result.getReturn.length > 0) {
       return result.getReturn[0];
