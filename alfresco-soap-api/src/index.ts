@@ -1,5 +1,6 @@
 import { AuthenticationService } from './services/AuthenticationService';
 import { RepositoryService } from './services/RepositoryService';
+import { ContentService } from './services/ContentService';
 import { NodeRef } from './models/NodeRef';
 import { StoreRef } from './models/StoreRef';
 
@@ -16,16 +17,19 @@ export class AlfrescoClient {
   ticket: string | null = null;
   authService: AuthenticationService;
   repoService: RepositoryService;
+  contentService: ContentService;
 
   constructor(config: AlfrescoClientConfig) {
     this.config = config;
     this.authService = new AuthenticationService(config.url);
     this.repoService = new RepositoryService(config.url);
+    this.contentService = new ContentService(config.url);
   }
 
   async authenticate() {
     this.ticket = await this.authService.login(this.config.username, this.config.password);
     this.repoService.setTicket(this.ticket, this.config.username);
+    this.contentService.setTicket(this.ticket, this.config.username);
     return this.ticket;
   }
 }
@@ -194,6 +198,19 @@ function extractNodesFromQueryResponse(result: any): any[] {
       };
     })
     .filter((node: any) => node.nodeRef !== 'unknown'); // Filter out nodes we couldn't parse
+}
+
+export async function getFileContent(client: AlfrescoClient, nodeRef: NodeRef): Promise<any> {
+  await client.authenticate();
+  
+  try {
+    console.log(`[alfresco-soap-api] Getting file content for nodeRef: ${nodeRef}`);
+    const content = await client.contentService.read(nodeRef);
+    return content;
+  } catch (contentError) {
+    console.error(`[alfresco-soap-api] ContentService.read failed for ${nodeRef}:`, contentError);
+    throw new Error(`Failed to get content for nodeRef ${nodeRef}: ${(contentError as Error).message}`);
+  }
 }
 
 // Helper: convert nodeRef to path (for now, only supports company_home)
