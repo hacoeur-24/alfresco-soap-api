@@ -118,7 +118,30 @@ export async function getChildren(client: AlfrescoClient, nodeRef: NodeRef): Pro
   // Fetch Company Home nodeRef for robust root detection
   const companyHome = await getCompanyHome(client);
   const companyHomeNodeRef = companyHome.nodeRef;
-  // Resolve the full Lucene path for the nodeRef
+
+  // Special case: If nodeRef is Company Home, use the known Lucene path
+  if (
+    (companyHomeNodeRef && normalizeNodeRef(nodeRef) === normalizeNodeRef(companyHomeNodeRef)) ||
+    (nodeRef && nodeRef.endsWith('://root'))
+  ) {
+    const path = '/app:company_home/*';
+    const query = {
+      language: 'lucene',
+      statement: `PATH:"${path}"`,
+    };
+    const storeObj = { scheme: client.config.scheme, address: client.config.address };
+    const result = await client.repoService.query(storeObj, query, false);
+    const nodes = result.queryReturn || result.nodes || [];
+    const arr = Array.isArray(nodes) ? nodes : [nodes];
+    return arr.map((node: any) => ({
+      nodeRef: node.nodeRef,
+      name: node.name || node.properties?.['cm:name'] || node.nodeRef,
+      type: node.type,
+      properties: node.properties,
+    }));
+  }
+
+  // Normal case: resolve path recursively
   const path = await resolvePathForNodeRef(client, nodeRef, 0, companyHomeNodeRef);
   const query = {
     language: 'lucene',
