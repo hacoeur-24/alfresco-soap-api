@@ -11,6 +11,7 @@ A TypeScript library for connecting to Alfresco Content Services via the SOAP AP
 - No hardcoded nodeRefs or credentials—fully configurable
 - **Consistent, normalized return values** for all methods (always arrays/objects, never SOAP-wrapped responses)
 - **Navigate the full Alfresco folder structure**: `getChildren` now works for any nodeRef, not just Company Home
+- **Robust recursive path resolution**: `getChildren` can traverse all folders and subfolders, making it ideal for migration and full repository traversal
 
 ## Installation
 
@@ -42,7 +43,7 @@ export async function GET() {
 
 - `AlfrescoClient(config)` — Create a new client instance (pass your Alfresco URL, username, password, scheme, and address)
 - `getCompanyHome(client)` — Get the Company Home node
-- `getChildren(client, nodeRef)` — Get children of a node (always returns an array, works for any folder/nodeRef)
+- `getChildren(client, nodeRef)` — Get children of a node (always returns an array, works for any folder/nodeRef by resolving the full path recursively)
 - `authenticate(client)` — Authenticate and get a ticket
 
 ## Example Project
@@ -57,6 +58,7 @@ A full-stack example using this library in a Next.js app is provided in the [`ne
 - Use in Next.js API routes, Express, or any Node.js backend.
 - All methods return normalized, developer-friendly data structures.
 - `getChildren` now works for any nodeRef, so you can browse Sites, User Homes, Data Dictionary, and all subfolders/files.
+- **Path resolution:** The library will recursively resolve the full Lucene path for any nodeRef, enabling robust navigation and migration use cases (e.g., full repository export, folder/file migration, etc.).
 
 ## License
 

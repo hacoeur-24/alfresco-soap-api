@@ -45,10 +45,49 @@ export async function getCompanyHome(client: AlfrescoClient): Promise<any> {
   throw new Error('Company Home not found');
 }
 
+// Helper: recursively resolve the full Lucene path for a nodeRef
+async function resolvePathForNodeRef(client: AlfrescoClient, nodeRef: string): Promise<string> {
+  // Fetch the node
+  await client.authenticate();
+  const node = await client.repoService.get(nodeRef);
+  // If this is company_home, return /app:company_home
+  if (node.properties && node.properties['app:icon'] === 'company_home') {
+    return '/app:company_home';
+  }
+  // If this is the root, return '/'
+  if (node.nodeRef.endsWith('://root')) return '/';
+  // Get parent nodeRef
+  const parentAssoc = node.parent || node.properties?.['cm:parent'] || node.properties?.['cm:parentAssoc'] || node.parentNodeRef;
+  if (!parentAssoc) throw new Error('Cannot resolve parent for nodeRef: ' + nodeRef);
+  // Recursively resolve parent path
+  const parentPath = await resolvePathForNodeRef(client, parentAssoc);
+  // Get this node's name (cm:name)
+  const nodeName = node.name || node.properties?.['cm:name'];
+  if (!nodeName) throw new Error('Node has no name: ' + nodeRef);
+  // Alfresco path elements are prefixed with cm: or other namespace
+  const type = node.type || node.properties?.['cm:type'];
+  const ns = type && type.startsWith('cm:') ? 'cm:' : '';
+  return parentPath.endsWith('/') ? `${parentPath}${ns}${nodeName}` : `${parentPath}/${ns}${nodeName}`;
+}
+
 export async function getChildren(client: AlfrescoClient, nodeRef: NodeRef): Promise<any[]> {
   await client.authenticate();
-  // Use the RepositoryService.getNodeChildren method to fetch children by nodeRef
-  return client.repoService.getNodeChildren(nodeRef);
+  // Resolve the full Lucene path for the nodeRef
+  const path = await resolvePathForNodeRef(client, nodeRef);
+  const query = {
+    language: 'lucene',
+    statement: `PATH:"${path}/*"`,
+  };
+  const storeObj = { scheme: client.config.scheme, address: client.config.address };
+  const result = await client.repoService.query(storeObj, query, false);
+  const nodes = result.queryReturn || result.nodes || [];
+  const arr = Array.isArray(nodes) ? nodes : [nodes];
+  return arr.map((node: any) => ({
+    nodeRef: node.nodeRef,
+    name: node.name || node.properties?.['cm:name'] || node.nodeRef,
+    type: node.type,
+    properties: node.properties,
+  }));
 }
 
 // Helper: convert nodeRef to path (for now, only supports company_home)
