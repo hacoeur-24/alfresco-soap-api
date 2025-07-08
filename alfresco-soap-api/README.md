@@ -53,6 +53,22 @@ A full-stack example using this library in a Next.js app is provided in the [`ne
 - See [`nextjs-example/README.md`](../nextjs-example/README.md) for setup and usage instructions.
 - The example demonstrates how to use this library in Next.js API routes and connect a React frontend to Alfresco.
 
+## Robust Recursive Path Resolution
+
+Alfresco's SOAP API does not provide a direct way to fetch children for any nodeRef. This library implements a robust recursive path resolution algorithm:
+
+- For any nodeRef, the library will recursively fetch the node and its parent chain, building the full Lucene path (e.g., `/app:company_home/cm:Sites/cm:MySite`).
+- This path is then used in a Lucene query to fetch children, enabling navigation and traversal for all folders, subfolders, and files.
+- This approach is industry standard for Alfresco integrations and is essential for migration, export, and deep traversal use cases.
+- The implementation includes defensive checks, logging, and a recursion limit to prevent infinite loops and help debug edge cases.
+
+## Troubleshooting
+
+- If you see errors like `Cannot resolve parent for nodeRef: ...` or `Node has no name: ...`, check your Alfresco repository for orphaned nodes or nodes missing required properties.
+- The library logs detailed errors to help you identify problematic nodeRefs and understand why a path could not be resolved.
+- If you hit the recursion limit, your repository may have a circular parent reference or be corrupted.
+- For migration or export, always check logs for any skipped or errored nodes.
+
 ## Notes
 - This package is **Node.js only**. Do not import it in browser code.
 - Use in Next.js API routes, Express, or any Node.js backend.
