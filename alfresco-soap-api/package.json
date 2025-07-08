@@ -1,6 +1,6 @@
 {
   "name": "alfresco-soap-api",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Alfresco SOAP API client for Node.js (for use in Next.js API routes, Express, etc.)",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -16,13 +16,20 @@
   },
   "devDependencies": {
     "@types/node": "^20.19.4",
+    "@types/soap": "^0.18.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.8.3"
   },
   "scripts": {
     "build": "tsc"
   },
-  "keywords": ["alfresco", "soap", "api", "nodejs", "nextjs"],
+  "keywords": [
+    "alfresco",
+    "soap",
+    "api",
+    "nodejs",
+    "nextjs"
+  ],
   "author": "",
   "license": "MIT"
 }
