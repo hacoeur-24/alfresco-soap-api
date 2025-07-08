@@ -1,40 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { AlfrescoClient, getCompanyHome, getChildren } from 'alfresco-soap-api';
-
-// Helper to normalize nodeRefs
-function normalizeNodeRef(ref: string) {
-  return (ref || '').trim().toLowerCase();
-}
+import { AlfrescoClient, getChildren } from 'alfresco-soap-api';
 
 export async function GET(req: NextRequest) {
   const nodeRef = req.nextUrl.searchParams.get('nodeRef');
   const store = req.nextUrl.searchParams.get('store') || process.env.ALFRESCO_ADDRESS || 'SpacesStore';
+  
   if (!nodeRef) {
     return NextResponse.json({ error: 'Missing nodeRef' }, { status: 400 });
   }
-  const client = new AlfrescoClient({
-    url: process.env.ALFRESCO_URL!,
-    username: process.env.ALFRESCO_USERNAME!,
-    password: process.env.ALFRESCO_PASSWORD!,
-    scheme: process.env.ALFRESCO_SCHEME || 'workspace',
-    address: store,
-  });
 
-  // Always fetch the real Company Home nodeRef
-  const companyHome = await getCompanyHome(client);
-  const companyHomeNodeRef = companyHome?.nodeRef;
-  const normalizedNodeRef = normalizeNodeRef(nodeRef);
-  const normalizedCompanyHomeNodeRef = normalizeNodeRef(companyHomeNodeRef);
+  try {
+    const client = new AlfrescoClient({
+      url: process.env.ALFRESCO_URL!,
+      username: process.env.ALFRESCO_USERNAME!,
+      password: process.env.ALFRESCO_PASSWORD!,
+      scheme: process.env.ALFRESCO_SCHEME || 'workspace',
+      address: store,
+    });
 
-  if (
-    normalizedNodeRef === '/app:company_home' ||
-    normalizedNodeRef === '/app:company_home/*' ||
-    normalizedNodeRef === normalizedCompanyHomeNodeRef
-  ) {
-    const children = await getChildren(client, '/app:company_home');
+    // The backend now handles all Company Home logic and SOAP method selection
+    const children = await getChildren(client, nodeRef);
     return NextResponse.json(children);
+  } catch (error) {
+    console.error('Failed to get children:', error);
+    return NextResponse.json(
+      { error: 'Failed to load children: ' + (error as Error).message }, 
+      { status: 500 }
+    );
   }
-
-  const children = await getChildren(client, nodeRef);
-  return NextResponse.json(children);
 } 
