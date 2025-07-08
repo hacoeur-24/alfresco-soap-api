@@ -8,15 +8,13 @@ import ErrorModal from './components/ErrorModal';
 // Color palette
 const COLORS = {
   mainBg: '#3AAFA9',
+  sidebar: '#2B7A78',
+  white: '#FEFFFF',
 };
 
-interface Store {
-  address: string;
-}
-
 export default function HomePage() {
-  const [stores, setStores] = useState<Store[]>([]);
-  const [selectedStore, setSelectedStore] = useState<Store | null>(null);
+  const [companyHomeChildren, setCompanyHomeChildren] = useState<any[]>([]);
+  const [selectedRoot, setSelectedRoot] = useState<any | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sidebarLoading, setSidebarLoading] = useState(false);
   const [sidebarError, setSidebarError] = useState<string | null>(null);
@@ -24,19 +22,20 @@ export default function HomePage() {
   const [nodeStack, setNodeStack] = useState<any[]>([]);
   const [children, setChildren] = useState<any[]>([]);
 
-  // Fetch stores from API
-  const fetchStores = async () => {
+  // Fetch Company Home and its children on mount
+  const fetchCompanyHomeAndChildren = async () => {
     setError(null);
     setSidebarLoading(true);
     try {
-      const res = await fetch('/api/stores');
-      if (!res.ok) throw new Error('Failed to fetch stores');
-      const data = await res.json();
-      console.log('Stores API : ', data);
-      setStores(data);
-      if (data.length > 0 && !selectedStore) {
-        setSelectedStore(data[0]);
-      }
+      const res = await fetch('/api/company-home');
+      if (!res.ok) throw new Error('Failed to fetch Company Home');
+      const companyHome = await res.json();
+      const childrenRes = await fetch(`/api/children?nodeRef=${encodeURIComponent(companyHome.nodeRef)}`);
+      if (!childrenRes.ok) throw new Error('Failed to fetch Company Home children');
+      const children = await childrenRes.json();
+      setCompanyHomeChildren(children);
+      // Optionally, select the first root by default
+      // setSelectedRoot(children[0] || null);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -44,41 +43,44 @@ export default function HomePage() {
     }
   };
 
-  // Fetch Company Home and its children when store changes
+  // When a root (e.g., Sites) is selected, show its children in the sidebar
   useEffect(() => {
-    if (!selectedStore) return;
+    if (!selectedRoot || !selectedRoot.nodeRef) {
+      setChildren([]);
+      setNodeStack([]);
+      setCurrentNode(null);
+      return;
+    }
     setSidebarLoading(true);
     setSidebarError(null);
-    fetch(`/api/company-home?store=${encodeURIComponent(selectedStore.address)}`)
-      .then(res => {
-        if (!res.ok) throw new Error('Failed to load Company Home');
-        return res.json();
-      })
-      .then(node => {
-        setCurrentNode(node);
-        setNodeStack([node]);
-        return fetch(`/api/children?nodeRef=${encodeURIComponent(node.nodeRef)}&store=${encodeURIComponent(selectedStore.address)}`);
-      })
+    fetch(`/api/children?nodeRef=${encodeURIComponent(selectedRoot.nodeRef)}`)
       .then(res => {
         if (!res.ok) throw new Error('Failed to load children');
         return res.json();
       })
       .then(children => {
         setChildren(children);
+        setNodeStack([selectedRoot]);
+        setCurrentNode(null);
       })
       .catch(err => {
-        setSidebarError('Failed to load Company Home: ' + err.message);
-        setCurrentNode(null);
+        setSidebarError('Failed to load children: ' + err.message);
         setChildren([]);
+        setNodeStack([]);
+        setCurrentNode(null);
       })
       .finally(() => setSidebarLoading(false));
-  }, [selectedStore]);
+  }, [selectedRoot]);
 
-  // Fetch children when navigating
+  // When a node is clicked in the sidebar, fetch its children
   const navigateToNode = (node: any) => {
+    if (!node || !node.nodeRef) {
+      setSidebarError('Invalid node selected.');
+      return;
+    }
     setSidebarLoading(true);
     setSidebarError(null);
-    fetch(`/api/children?nodeRef=${encodeURIComponent(node.nodeRef)}&store=${encodeURIComponent(selectedStore?.address || '')}`)
+    fetch(`/api/children?nodeRef=${encodeURIComponent(node.nodeRef)}`)
       .then(res => {
         if (!res.ok) throw new Error('Failed to load children');
         return res.json();
@@ -100,15 +102,22 @@ export default function HomePage() {
       const newStack = [...nodeStack];
       newStack.pop();
       const prevNode = newStack[newStack.length - 1];
+      if (!prevNode || !prevNode.nodeRef) {
+        setSidebarError('Invalid node in navigation stack.');
+        setChildren([]);
+        setNodeStack([]);
+        setCurrentNode(null);
+        return;
+      }
       setSidebarLoading(true);
       setSidebarError(null);
-      fetch(`/api/children?nodeRef=${encodeURIComponent(prevNode.nodeRef)}&store=${encodeURIComponent(selectedStore?.address || '')}`)
+      fetch(`/api/children?nodeRef=${encodeURIComponent(prevNode.nodeRef)}`)
         .then(res => {
           if (!res.ok) throw new Error('Failed to load children');
           return res.json();
         })
         .then(children => {
-          setCurrentNode(prevNode);
+          setCurrentNode(prevNode === nodeStack[0] ? null : prevNode);
           setNodeStack(newStack);
           setChildren(children);
         })
@@ -119,31 +128,73 @@ export default function HomePage() {
     }
   };
 
+  // Add a Go Home button handler
+  const goHome = async () => {
+    setError(null);
+    setSidebarLoading(true);
+    try {
+      const res = await fetch('/api/company-home');
+      if (!res.ok) throw new Error('Failed to fetch Company Home');
+      const companyHome = await res.json();
+      const childrenRes = await fetch(`/api/children?nodeRef=${encodeURIComponent(companyHome.nodeRef)}`);
+      if (!childrenRes.ok) throw new Error('Failed to fetch Company Home children');
+      const children = await childrenRes.json();
+      setCompanyHomeChildren(children);
+      setSelectedRoot(null);
+      setChildren([]);
+      setNodeStack([]);
+      setCurrentNode(null);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setSidebarLoading(false);
+    }
+  };
+
   // Initial fetch
   useEffect(() => {
-    fetchStores();
+    fetchCompanyHomeAndChildren();
     // eslint-disable-next-line
   }, []);
 
   return (
     <div style={{ background: COLORS.mainBg, display: 'flex', flexDirection: 'column', fontFamily: 'sans-serif', overflowX: 'hidden', boxSizing: 'border-box', minHeight: '100vh', minWidth: '100vw', width: '100vw' }}>
       <Header
-        stores={stores}
-        selectedStore={selectedStore}
-        onSelectStore={setSelectedStore}
-        onReload={fetchStores}
+        roots={companyHomeChildren}
+        selectedRoot={selectedRoot}
+        onSelectRoot={setSelectedRoot}
+        onReload={fetchCompanyHomeAndChildren}
       />
       <div style={{ flex: 1, display: 'flex', minHeight: 0, width: '100%' }}>
-        {!error && (
-          <Sidebar
-            nodes={children}
-            nodeStack={nodeStack}
-            loading={sidebarLoading}
-            error={sidebarError}
-            onNodeClick={navigateToNode}
-            onBack={goBack}
-          />
-        )}
+        <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+          <button
+            onClick={goHome}
+            style={{
+              margin: '16px',
+              background: COLORS.sidebar,
+              color: COLORS.white,
+              border: 'none',
+              borderRadius: 6,
+              padding: '8px 18px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              fontSize: 16,
+              alignSelf: 'flex-start',
+            }}
+          >
+            Go Home
+          </button>
+          {!error && (
+            <Sidebar
+              nodes={children}
+              nodeStack={nodeStack}
+              loading={sidebarLoading}
+              error={sidebarError}
+              onNodeClick={navigateToNode}
+              onBack={goBack}
+            />
+          )}
+        </div>
         <MainContent node={currentNode} />
       </div>
       {error && <ErrorModal message={error} onClose={() => setError(null)} />}

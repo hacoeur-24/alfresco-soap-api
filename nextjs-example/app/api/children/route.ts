@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { AlfrescoClient, getChildren } from 'alfresco-soap-api';
+import { AlfrescoClient, getCompanyHome, getChildren } from 'alfresco-soap-api';
+
+// Helper to normalize nodeRefs
+function normalizeNodeRef(ref: string) {
+  return (ref || '').trim().toLowerCase();
+}
 
 export async function GET(req: NextRequest) {
   const nodeRef = req.nextUrl.searchParams.get('nodeRef');
@@ -14,6 +19,22 @@ export async function GET(req: NextRequest) {
     scheme: process.env.ALFRESCO_SCHEME || 'workspace',
     address: store,
   });
+
+  // Always fetch the real Company Home nodeRef
+  const companyHome = await getCompanyHome(client);
+  const companyHomeNodeRef = companyHome?.nodeRef;
+  const normalizedNodeRef = normalizeNodeRef(nodeRef);
+  const normalizedCompanyHomeNodeRef = normalizeNodeRef(companyHomeNodeRef);
+
+  if (
+    normalizedNodeRef === '/app:company_home' ||
+    normalizedNodeRef === '/app:company_home/*' ||
+    normalizedNodeRef === normalizedCompanyHomeNodeRef
+  ) {
+    const children = await getChildren(client, '/app:company_home');
+    return NextResponse.json(children);
+  }
+
   const children = await getChildren(client, nodeRef);
   return NextResponse.json(children);
 } 

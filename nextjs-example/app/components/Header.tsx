@@ -10,18 +10,14 @@ const COLORS = {
   white: '#FEFFFF',
 };
 
-interface Store {
-  address: string;
-}
-
 interface HeaderProps {
-  stores: Store[];
-  selectedStore: Store | null;
-  onSelectStore: (store: Store) => void;
+  roots: any[];
+  selectedRoot: any;
+  onSelectRoot: (root: any) => void;
   onReload: () => void;
 }
 
-const Header: React.FC<HeaderProps> = ({ stores, selectedStore, onSelectStore, onReload }) => (
+const Header: React.FC<HeaderProps> = ({ roots, selectedRoot, onSelectRoot, onReload }) => (
   <nav style={{
     display: 'flex',
     alignItems: 'center',
@@ -35,14 +31,14 @@ const Header: React.FC<HeaderProps> = ({ stores, selectedStore, onSelectStore, o
     <h2 style={{ marginRight: 32, fontWeight: 700, letterSpacing: 1, fontSize: 24, color: COLORS.white }}>
       Alfresco
     </h2>
-    {stores.map((store) => (
+    {roots.map((root, idx) => (
       <button
-        key={store.address}
-        onClick={() => onSelectStore(store)}
+        key={root.nodeRef || root.name || idx}
+        onClick={() => onSelectRoot(root)}
         style={{
           marginRight: 16,
-          background: selectedStore?.address === store.address ? COLORS.sidebar : COLORS.sidebarBg,
-          color: selectedStore?.address === store.address ? COLORS.white : COLORS.text,
+          background: selectedRoot?.nodeRef === root.nodeRef ? COLORS.sidebar : COLORS.sidebarBg,
+          color: selectedRoot?.nodeRef === root.nodeRef ? COLORS.white : COLORS.text,
           border: 'none',
           borderRadius: 6,
           padding: '8px 18px',
@@ -53,12 +49,12 @@ const Header: React.FC<HeaderProps> = ({ stores, selectedStore, onSelectStore, o
           outline: 'none',
         }}
         onMouseOver={e => (e.currentTarget.style.background = COLORS.sidebar)}
-        onMouseOut={e => (e.currentTarget.style.background = selectedStore?.address === store.address ? COLORS.sidebar : COLORS.sidebarBg)}
+        onMouseOut={e => (e.currentTarget.style.background = selectedRoot?.nodeRef === root.nodeRef ? COLORS.sidebar : COLORS.sidebarBg)}
         onFocus={e => (e.currentTarget.style.background = COLORS.sidebar)}
-        onBlur={e => (e.currentTarget.style.background = selectedStore?.address === store.address ? COLORS.sidebar : COLORS.sidebarBg)}
-        aria-pressed={selectedStore?.address === store.address}
+        onBlur={e => (e.currentTarget.style.background = selectedRoot?.nodeRef === root.nodeRef ? COLORS.sidebar : COLORS.sidebarBg)}
+        aria-pressed={selectedRoot?.nodeRef === root.nodeRef}
       >
-        {store.address}
+        {root.name || root.nodeRef}
       </button>
     ))}
     <div style={{ flex: 1 }} />
@@ -76,7 +72,7 @@ const Header: React.FC<HeaderProps> = ({ stores, selectedStore, onSelectStore, o
         marginLeft: 16,
       }}
     >
-      Reload Stores
+      Reload
     </button>
   </nav>
 );
