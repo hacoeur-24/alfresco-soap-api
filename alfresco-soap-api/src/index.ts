@@ -46,7 +46,7 @@ export async function getCompanyHome(client: AlfrescoClient): Promise<any> {
 }
 
 // Helper: recursively resolve the full Lucene path for a nodeRef (robust version)
-async function resolvePathForNodeRef(client: AlfrescoClient, nodeRef: string, depth = 0): Promise<string> {
+async function resolvePathForNodeRef(client: AlfrescoClient, nodeRef: string, depth = 0, companyHomeNodeRef?: string): Promise<string> {
   if (!nodeRef || typeof nodeRef !== 'string') {
     console.error(`[alfresco-soap-api] resolvePathForNodeRef: Invalid nodeRef:`, nodeRef);
     throw new Error('Invalid nodeRef passed to resolvePathForNodeRef');
@@ -64,7 +64,10 @@ async function resolvePathForNodeRef(client: AlfrescoClient, nodeRef: string, de
     throw new Error('Failed to fetch node for nodeRef: ' + nodeRef);
   }
   // If this is company_home, return /app:company_home
-  if (node.properties && (node.properties['app:icon'] === 'company_home' || node.name === 'Company Home')) {
+  if (
+    (companyHomeNodeRef && nodeRef === companyHomeNodeRef) ||
+    (node.properties && (node.properties['app:icon'] === 'company_home' || node.name === 'Company Home'))
+  ) {
     return '/app:company_home';
   }
   // If this is the root, return '/'
@@ -91,7 +94,7 @@ async function resolvePathForNodeRef(client: AlfrescoClient, nodeRef: string, de
     throw new Error('Cannot resolve parent for nodeRef: ' + nodeRef);
   }
   // Recursively resolve parent path
-  const parentPath = await resolvePathForNodeRef(client, parentAssoc, depth + 1);
+  const parentPath = await resolvePathForNodeRef(client, parentAssoc, depth + 1, companyHomeNodeRef);
   // Get this node's name (cm:name)
   const nodeName = node.name || node.properties?.['cm:name'];
   if (!nodeName) {
@@ -106,8 +109,11 @@ async function resolvePathForNodeRef(client: AlfrescoClient, nodeRef: string, de
 
 export async function getChildren(client: AlfrescoClient, nodeRef: NodeRef): Promise<any[]> {
   await client.authenticate();
+  // Fetch Company Home nodeRef for robust root detection
+  const companyHome = await getCompanyHome(client);
+  const companyHomeNodeRef = companyHome.nodeRef;
   // Resolve the full Lucene path for the nodeRef
-  const path = await resolvePathForNodeRef(client, nodeRef);
+  const path = await resolvePathForNodeRef(client, nodeRef, 0, companyHomeNodeRef);
   const query = {
     language: 'lucene',
     statement: `PATH:"${path}/*"`,

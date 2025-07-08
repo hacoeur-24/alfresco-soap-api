@@ -14,6 +14,7 @@ A TypeScript library for connecting to Alfresco Content Services via the SOAP AP
 - **Robust recursive path resolution**: `getChildren` can traverse all folders and subfolders, making it ideal for migration and full repository traversal
 - **Automatic nodeRef normalization**: All nodeRefs are parsed and passed to the Alfresco SOAP API in the correct `{ scheme, address, uuid }` format, so you never have to worry about SOAP compatibility
 - **WSDL-compliant get method**: The library's `get` method uses the correct Predicate structure (`{ where: { nodes: [ { store, uuid } ] } }`) for all node lookups, matching the Alfresco RepositoryService WSDL
+- **Root node (Company Home) detection**: The library now robustly detects Company Home by nodeRef as well as by properties, so it will never attempt to resolve a parent for the root node. This prevents errors and enables seamless navigation from the repository root.
 
 ## Installation
 
@@ -60,6 +61,7 @@ A full-stack example using this library in a Next.js app is provided in the [`ne
 Alfresco's SOAP API does not provide a direct way to fetch children for any nodeRef. This library implements a robust recursive path resolution algorithm:
 
 - For any nodeRef, the library will recursively fetch the node and its parent chain, building the full Lucene path (e.g., `/app:company_home/cm:Sites/cm:MySite`).
+- **Special handling for Company Home/root nodes:** The library detects Company Home by nodeRef as well as by properties, and will never attempt to resolve a parent for the root node. This prevents errors like "Could not resolve parent for nodeRef: ..." when browsing from the repository root.
 - This path is then used in a Lucene query to fetch children, enabling navigation and traversal for all folders, subfolders, and files.
 - This approach is industry standard for Alfresco integrations and is essential for migration, export, and deep traversal use cases.
 - The implementation includes defensive checks, logging, and a recursion limit to prevent infinite loops and help debug edge cases.
@@ -68,7 +70,7 @@ Alfresco's SOAP API does not provide a direct way to fetch children for any node
 
 ## Troubleshooting
 
-- If you see errors like `Cannot resolve parent for nodeRef: ...` or `Node has no name: ...`, check your Alfresco repository for orphaned nodes or nodes missing required properties.
+- If you see errors like `Cannot resolve parent for nodeRef: ...` or `Node has no name: ...`, check your Alfresco repository for orphaned nodes or nodes missing required properties. **Note:** This error should never occur for Company Home or root nodes, as the library now detects and handles these cases automatically.
 - The library logs detailed errors to help you identify problematic nodeRefs and understand why a path could not be resolved.
 - If you hit the recursion limit, your repository may have a circular parent reference or be corrupted.
 - For migration or export, always check logs for any skipped or errored nodes.
