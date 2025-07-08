@@ -172,14 +172,10 @@ export async function getChildren(client: AlfrescoClient, nodeRef: NodeRef): Pro
     };
     const storeObj = { scheme: client.config.scheme, address: client.config.address };
     const result = await client.repoService.query(storeObj, query, false);
-    const nodes = result.queryReturn || result.nodes || [];
-    const arr = Array.isArray(nodes) ? nodes : [nodes];
-    return arr.map((node: any) => ({
-      nodeRef: node.nodeRef,
-      name: node.name || node.properties?.['cm:name'] || node.nodeRef,
-      type: node.type,
-      properties: node.properties,
-    }));
+    
+    // Extract nodes from the SOAP response - could be in various shapes
+    const extractedNodes = extractNodesFromQueryResponse(result);
+    return extractedNodes;
   }
 
   // All other cases: resolve path recursively
@@ -190,14 +186,80 @@ export async function getChildren(client: AlfrescoClient, nodeRef: NodeRef): Pro
   };
   const storeObj = { scheme: client.config.scheme, address: client.config.address };
   const result = await client.repoService.query(storeObj, query, false);
-  const nodes = result.queryReturn || result.nodes || [];
-  const arr = Array.isArray(nodes) ? nodes : [nodes];
-  return arr.map((node: any) => ({
-    nodeRef: node.nodeRef,
-    name: node.name || node.properties?.['cm:name'] || node.nodeRef,
-    type: node.type,
-    properties: node.properties,
-  }));
+  
+  // Extract nodes from the SOAP response
+  const extractedNodes = extractNodesFromQueryResponse(result);
+  return extractedNodes;
+}
+
+// Helper function to extract nodes from query response in any shape
+function extractNodesFromQueryResponse(result: any): any[] {
+  if (!result) return [];
+
+  // Try different response shapes that Alfresco SOAP can return
+  let rawNodes: any[] = [];
+  
+  if (Array.isArray(result.queryReturn)) {
+    rawNodes = result.queryReturn;
+  } else if (result.queryReturn?.resultSet?.rows) {
+    rawNodes = Array.isArray(result.queryReturn.resultSet.rows) 
+      ? result.queryReturn.resultSet.rows 
+      : [result.queryReturn.resultSet.rows];
+  } else if (result.queryReturn) {
+    rawNodes = Array.isArray(result.queryReturn) ? result.queryReturn : [result.queryReturn];
+  } else if (result.nodes) {
+    rawNodes = Array.isArray(result.nodes) ? result.nodes : [result.nodes];
+  } else if (result.getReturn) {
+    rawNodes = Array.isArray(result.getReturn) ? result.getReturn : [result.getReturn];
+  }
+
+  return rawNodes
+    .filter((node: any) => node && (node.nodeRef || node.columns)) // Keep nodes that have nodeRef or columns
+    .map((node: any) => {
+      // Try to extract nodeRef directly first
+      let nodeRef: string | undefined = node.nodeRef;
+      let name: string | undefined = node.name;
+      let type: string | undefined = node.type;
+      let properties: any = node.properties;
+
+      // If nodeRef is missing, try to reconstruct from columns (common in Lucene queries)
+      if (!nodeRef && Array.isArray(node.columns)) {
+        const getCol = (needle: string) => node.columns.find((c: any) => c.name && c.name.includes(needle))?.value;
+        const protocol = getCol('store-protocol');
+        const identifier = getCol('store-identifier');
+        const uuid = getCol('node-uuid');
+        if (protocol && identifier && uuid) {
+          nodeRef = `${protocol}://${identifier}/${uuid}`;
+        }
+        name = name || getCol('name') || getCol('cm:name');
+        type = type || getCol('type') || getCol('cm:type');
+        
+        // Build properties object from columns if not present
+        if (!properties && node.columns) {
+          properties = {};
+          node.columns.forEach((col: any) => {
+            if (col.name && col.value !== undefined) {
+              properties[col.name] = col.value;
+            }
+          });
+        }
+      }
+
+      // Fallback name extraction
+      if (!name) {
+        name = node.properties?.['cm:name'] || 
+               node.properties?.name ||
+               (nodeRef ? nodeRef.split('/').pop() : 'Unknown');
+      }
+
+      return {
+        nodeRef: nodeRef || 'unknown',
+        name: name || 'Unknown',
+        type: type || 'unknown',
+        properties: properties || {},
+      };
+    })
+    .filter((node: any) => node.nodeRef !== 'unknown'); // Filter out nodes we couldn't parse
 }
 
 // Helper: convert nodeRef to path (for now, only supports company_home)

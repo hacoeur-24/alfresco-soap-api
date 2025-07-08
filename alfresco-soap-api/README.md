@@ -15,6 +15,7 @@ A TypeScript library for connecting to Alfresco Content Services via the SOAP AP
 - **Automatic nodeRef normalization**: All nodeRefs are parsed and passed to the Alfresco SOAP API in the correct `{ scheme, address, uuid }` format, so you never have to worry about SOAP compatibility
 - **WSDL-compliant get method**: The library's `get` method uses the correct Predicate structure (`{ where: { nodes: [ { store, uuid } ] } }`) for all node lookups, matching the Alfresco RepositoryService WSDL
 - **Root node (Company Home) detection**: The library always treats Company Home as a special case. `getCompanyHome` **guarantees** it can extract the `nodeRef` from any Alfresco SOAP response shape (array, resultSet rows, etc.). If the SOAP payload does not include `nodeRef`, the library reconstructs it from the returned columns. As soon as the lookup succeeds, all subsequent logic uses the Lucene path `/app:company_home/*` to fetch children. This makes initial navigation from the repository root _bullet-proof_, regardless of nodeRef formatting or how Company Home is referenced.
+- **Robust SOAP response parsing**: Advanced data extraction logic handles all variations of Alfresco SOAP responses - whether data comes as direct properties, resultSet rows, or column arrays. Node information (`nodeRef`, `name`, `type`, `properties`) is intelligently reconstructed from any response format, ensuring reliable data extraction across different Alfresco versions and configurations.
 
 ## Installation
 
@@ -46,7 +47,7 @@ export async function GET() {
 
 - `AlfrescoClient(config)` — Create a new client instance (pass your Alfresco URL, username, password, scheme, and address)
 - `getCompanyHome(client)` — Get the Company Home node. **Returns** `{ nodeRef, name }` where `nodeRef` is guaranteed to be present.
-- `getChildren(client, nodeRef)` — Get children of a node (always returns an array, works for any folder/nodeRef by resolving the full path recursively)
+- `getChildren(client, nodeRef)` — Get children of a node (always returns an array of properly formatted node objects, works for any folder/nodeRef by resolving the full path recursively)
 - `authenticate(client)` — Authenticate and get a ticket
 
 ## Example Project
@@ -76,6 +77,7 @@ Alfresco's SOAP API does not provide a direct way to fetch children for any node
 - For migration or export, always check logs for any skipped or errored nodes.
 - **NodeRef format:** If you see errors about invalid nodeRef format, ensure you are passing nodeRefs in the form `workspace://SpacesStore/UUID`. The library will handle parsing and SOAP compatibility internally.
 - **WSDL compliance:** If you are customizing the library or using advanced features, refer to the Alfresco RepositoryService WSDL. The library's `get` method always uses `{ where: { nodes: [ { store, uuid } ] } }` for node lookups, as required by Alfresco SOAP.
+- **Empty results or missing node data:** If you're getting empty arrays or objects with missing properties, ensure your Alfresco server is configured correctly and the user has proper permissions. The library's robust data extraction should handle most SOAP response variations automatically.
 
 ## Notes
 - This package is **Node.js only**. Do not import it in browser code.
