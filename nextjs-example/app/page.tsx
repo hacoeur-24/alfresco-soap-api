@@ -24,15 +24,15 @@ export default function HomePage() {
   const [nodeStack, setNodeStack] = useState<any[]>([]);
   const [children, setChildren] = useState<any[]>([]);
 
-  // Fetch stores (simulate API call)
+  // Fetch stores from API
   const fetchStores = async () => {
     setError(null);
     setSidebarLoading(true);
     try {
-      // Replace with your backend API call
       const res = await fetch('/api/stores');
       if (!res.ok) throw new Error('Failed to fetch stores');
       const data = await res.json();
+      console.log('Stores API : ', data);
       setStores(data);
       if (data.length > 0 && !selectedStore) {
         setSelectedStore(data[0]);
