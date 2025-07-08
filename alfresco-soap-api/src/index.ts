@@ -47,15 +47,8 @@ export async function getCompanyHome(client: AlfrescoClient): Promise<any> {
 
 export async function getChildren(client: AlfrescoClient, nodeRef: NodeRef): Promise<any[]> {
   await client.authenticate();
-  const query = {
-    language: 'lucene',
-    statement: `PATH:"${await nodeRefToPath(client, nodeRef)}/*"`,
-  };
-  const storeObj = { scheme: client.config.scheme, address: client.config.address };
-  const result = await client.repoService.query(storeObj, query, false);
-  const nodes = result.queryReturn || result.nodes || [];
-  const arr = Array.isArray(nodes) ? nodes : [nodes];
-  return arr;
+  // Use the RepositoryService.getNodeChildren method to fetch children by nodeRef
+  return client.repoService.getNodeChildren(nodeRef);
 }
 
 // Helper: convert nodeRef to path (for now, only supports company_home)

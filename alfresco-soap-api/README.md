@@ -10,6 +10,7 @@ A TypeScript library for connecting to Alfresco Content Services via the SOAP AP
 - TypeScript types for StoreRef, NodeRef, and more
 - No hardcoded nodeRefs or credentials—fully configurable
 - **Consistent, normalized return values** for all methods (always arrays/objects, never SOAP-wrapped responses)
+- **Navigate the full Alfresco folder structure**: `getChildren` now works for any nodeRef, not just Company Home
 
 ## Installation
 
@@ -27,8 +28,8 @@ import { AlfrescoClient, getCompanyHome } from 'alfresco-soap-api';
 export async function GET() {
   const client = new AlfrescoClient({
     url: process.env.ALFRESCO_URL!,
-    username: process.env.ALFRESCO_USER!,
-    password: process.env.ALFRESCO_PASS!,
+    username: process.env.ALFRESCO_USERNAME!,
+    password: process.env.ALFRESCO_PASSWORD!,
     scheme: 'workspace',
     address: 'SpacesStore',
   });
@@ -39,9 +40,9 @@ export async function GET() {
 
 ## API
 
-- `AlfrescoClient(config)` — Create a new client instance
+- `AlfrescoClient(config)` — Create a new client instance (pass your Alfresco URL, username, password, scheme, and address)
 - `getCompanyHome(client)` — Get the Company Home node
-- `getChildren(client, nodeRef)` — Get children of a node (always returns an array)
+- `getChildren(client, nodeRef)` — Get children of a node (always returns an array, works for any folder/nodeRef)
 - `authenticate(client)` — Authenticate and get a ticket
 
 ## Example Project
@@ -55,6 +56,7 @@ A full-stack example using this library in a Next.js app is provided in the [`ne
 - This package is **Node.js only**. Do not import it in browser code.
 - Use in Next.js API routes, Express, or any Node.js backend.
 - All methods return normalized, developer-friendly data structures.
+- `getChildren` now works for any nodeRef, so you can browse Sites, User Homes, Data Dictionary, and all subfolders/files.
 
 ## License
 
