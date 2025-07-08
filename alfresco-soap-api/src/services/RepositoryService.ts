@@ -1,4 +1,5 @@
 import { SoapService } from '../common/SoapService';
+import { parseNodeRef } from '../models/NodeRef';
 
 export class RepositoryService extends SoapService {
   constructor(baseUrl: string) {
@@ -27,7 +28,16 @@ export class RepositoryService extends SoapService {
 
   async get(nodeRef: string): Promise<any> {
     await this.init();
-    return this.call('get', { nodeRef });
+    // Parse nodeRef into scheme, address, id
+    if (!nodeRef || typeof nodeRef !== 'string' || !nodeRef.includes('://')) {
+      throw new Error('Invalid nodeRef: ' + nodeRef);
+    }
+    const [scheme, rest] = nodeRef.split('://');
+    const [address, id] = rest.includes('/') ? rest.split('/') : [rest, undefined];
+    if (!scheme || !address || !id) {
+      throw new Error('Invalid nodeRef format: ' + nodeRef);
+    }
+    return this.call('get', { node: { store: { scheme, address }, id } });
   }
 
   async getRootChildren(_store: string): Promise<any[]> {
