@@ -43,21 +43,18 @@ export class RepositoryService extends SoapService {
 
   async getNodeChildren(nodeRef: string): Promise<any[]> {
     await this.init();
-    const query = {
-      language: 'lucene',
-      statement: `PATH:"${nodeRefToPath(nodeRef)}/*"`,
-    };
-    const [store] = nodeRef.split('://');
-    const storeObj = parseStoreAddress(store);
-    const result = await this.query(storeObj, query, false);
-    const nodes = result.queryReturn || result.nodes || [];
-    const arr = Array.isArray(nodes) ? nodes : [nodes];
-    return arr.map((node: any) => ({
-      nodeRef: node.nodeRef,
-      name: node.name || node.properties?.['cm:name'] || node.nodeRef,
-      type: node.type,
-      properties: node.properties,
-    }));
+    // Use the Alfresco SOAP getChildren method to fetch children by nodeRef
+    const result = await this.call('getChildren', { nodeRef });
+    let children = result.getChildrenReturn || result.children || result.nodes || [];
+    if (!Array.isArray(children)) children = [children];
+    return children
+      .filter((node: any) => node && node.nodeRef)
+      .map((node: any) => ({
+        nodeRef: node.nodeRef,
+        name: node.name || node.properties?.['cm:name'] || node.nodeRef,
+        type: node.type,
+        properties: node.properties,
+      }));
   }
 }
 
