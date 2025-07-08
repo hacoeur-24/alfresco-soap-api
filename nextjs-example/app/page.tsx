@@ -61,7 +61,7 @@ export default function HomePage() {
       .then(children => {
         setChildren(children);
         setNodeStack([selectedRoot]);
-        setCurrentNode(null);
+        setCurrentNode(selectedRoot); // Show the selected root in main content too
       })
       .catch(err => {
         setSidebarError('Failed to load children: ' + err.message);
@@ -86,12 +86,19 @@ export default function HomePage() {
         return res.json();
       })
       .then(children => {
+        // Always set the current node and its children
         setCurrentNode(node);
-        setNodeStack(prev => [...prev, node]);
-        setChildren(children);
+        // If the node has children, also navigate into it for sidebar
+        if (children && children.length > 0) {
+          setNodeStack(prev => [...prev, node]);
+          setChildren(children);
+        }
+        // If no children, keep current sidebar but show node details in main content
       })
       .catch(err => {
-        setSidebarError('Failed to load children: ' + err.message);
+        // If we can't get children (might be a file), show the node in main content
+        setCurrentNode(node);
+        setSidebarError(null); // Clear any previous errors since this might be expected for files
       })
       .finally(() => setSidebarLoading(false));
   };
@@ -117,7 +124,7 @@ export default function HomePage() {
           return res.json();
         })
         .then(children => {
-          setCurrentNode(prevNode === nodeStack[0] ? null : prevNode);
+          setCurrentNode(prevNode);
           setNodeStack(newStack);
           setChildren(children);
         })
@@ -128,29 +135,6 @@ export default function HomePage() {
     }
   };
 
-  // Add a Go Home button handler
-  const goHome = async () => {
-    setError(null);
-    setSidebarLoading(true);
-    try {
-      const res = await fetch('/api/company-home');
-      if (!res.ok) throw new Error('Failed to fetch Company Home');
-      const companyHome = await res.json();
-      const childrenRes = await fetch(`/api/children?nodeRef=${encodeURIComponent(companyHome.nodeRef)}`);
-      if (!childrenRes.ok) throw new Error('Failed to fetch Company Home children');
-      const children = await childrenRes.json();
-      setCompanyHomeChildren(children);
-      setSelectedRoot(null);
-      setChildren([]);
-      setNodeStack([]);
-      setCurrentNode(null);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setSidebarLoading(false);
-    }
-  };
-
   // Initial fetch
   useEffect(() => {
     fetchCompanyHomeAndChildren();
@@ -158,44 +142,40 @@ export default function HomePage() {
   }, []);
 
   return (
-    <div style={{ background: COLORS.mainBg, display: 'flex', flexDirection: 'column', fontFamily: 'sans-serif', overflowX: 'hidden', boxSizing: 'border-box', minHeight: '100vh', minWidth: '100vw', width: '100vw' }}>
+    <div style={{ 
+      background: COLORS.mainBg, 
+      display: 'flex', 
+      flexDirection: 'column', 
+      fontFamily: 'sans-serif', 
+      boxSizing: 'border-box', 
+      height: '100vh', 
+      width: '100vw',
+      overflow: 'hidden'
+    }}>
       <Header
         roots={companyHomeChildren}
         selectedRoot={selectedRoot}
         onSelectRoot={setSelectedRoot}
         onReload={fetchCompanyHomeAndChildren}
       />
-      <div style={{ flex: 1, display: 'flex', minHeight: 0, width: '100%' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-          <button
-            onClick={goHome}
-            style={{
-              margin: '16px',
-              background: COLORS.sidebar,
-              color: COLORS.white,
-              border: 'none',
-              borderRadius: 6,
-              padding: '8px 18px',
-              fontWeight: 600,
-              cursor: 'pointer',
-              fontSize: 16,
-              alignSelf: 'flex-start',
-            }}
-          >
-            Go Home
-          </button>
-          {!error && (
-            <Sidebar
-              nodes={children}
-              nodeStack={nodeStack}
-              loading={sidebarLoading}
-              error={sidebarError}
-              onNodeClick={navigateToNode}
-              onBack={goBack}
-            />
-          )}
-        </div>
-        <MainContent node={currentNode} />
+      <div style={{ 
+        flex: 1, 
+        display: 'flex', 
+        minHeight: 0, 
+        width: '100%',
+        overflow: 'hidden'
+      }}>
+        {!error && (
+          <Sidebar
+            nodes={children}
+            nodeStack={nodeStack}
+            loading={sidebarLoading}
+            error={sidebarError}
+            onNodeClick={navigateToNode}
+            onBack={goBack}
+          />
+        )}
+        <MainContent node={currentNode} children={children} />
       </div>
       {error && <ErrorModal message={error} onClose={() => setError(null)} />}
     </div>
