@@ -11,9 +11,9 @@ A TypeScript library for connecting to Alfresco Content Services via the SOAP AP
 - No hardcoded nodeRefs or credentials—fully configurable
 - **Consistent, normalized return values** for all methods (always arrays/objects, never SOAP-wrapped responses)
 - **Navigate the full Alfresco folder structure**: `getChildren` now works for any nodeRef, not just Company Home
-- **Enhanced parent detection**: Intelligent parent association discovery across multiple SOAP response fields and association types
+- **Native WSDL-compliant SOAP methods**: Uses Alfresco's official `queryChildren` SOAP operation for reliable folder navigation
 - **Automatic nodeRef normalization**: All nodeRefs are parsed and passed to the Alfresco SOAP API in the correct `{ scheme, address, uuid }` format, so you never have to worry about SOAP compatibility
-- **WSDL-compliant get method**: The library's `get` method uses the correct Predicate structure and attempts to include metadata for complete node information
+- **WSDL-compliant operations**: All SOAP methods strictly follow the Alfresco RepositoryService WSDL specification
 - **Root node (Company Home) detection**: The library always treats Company Home as a special case. `getCompanyHome` **guarantees** it can extract the `nodeRef` from any Alfresco SOAP response shape (array, resultSet rows, etc.). If the SOAP payload does not include `nodeRef`, the library reconstructs it from the returned columns. As soon as the lookup succeeds, all subsequent logic uses the Lucene path `/app:company_home/*` to fetch children. This makes initial navigation from the repository root _bullet-proof_, regardless of nodeRef formatting or how Company Home is referenced.
 - **Robust SOAP response parsing**: Advanced data extraction logic handles all variations of Alfresco SOAP responses - whether data comes as direct properties, resultSet rows, or column arrays. Node information (`nodeRef`, `name`, `type`, `properties`) is intelligently reconstructed from any response format, ensuring reliable data extraction across different Alfresco versions and configurations.
 
@@ -47,7 +47,7 @@ export async function GET() {
 
 - `AlfrescoClient(config)` — Create a new client instance (pass your Alfresco URL, username, password, scheme, and address)
 - `getCompanyHome(client)` — Get the Company Home node. **Returns** `{ nodeRef, name }` where `nodeRef` is guaranteed to be present.
-- `getChildren(client, nodeRef)` — Get children of a node (always returns an array of properly formatted node objects, uses recursive path resolution with enhanced parent detection)
+- `getChildren(client, nodeRef)` — Get children of a node (always returns an array of properly formatted node objects, uses native Alfresco SOAP `queryChildren` method)
 - `authenticate(client)` — Authenticate and get a ticket
 
 ## Example Project
@@ -57,52 +57,54 @@ A full-stack example using this library in a Next.js app is provided in the [`ne
 - See [`nextjs-example/README.md`](../nextjs-example/README.md) for setup and usage instructions.
 - The example demonstrates how to use this library in Next.js API routes and connect a React frontend to Alfresco.
 
-## Robust Path Resolution with Enhanced Parent Detection
+## Native SOAP Operations with WSDL Compliance
 
-This library implements a **comprehensive approach** to folder navigation that works across all Alfresco installations:
+This library uses **official Alfresco SOAP methods** that match the RepositoryService WSDL specification exactly:
 
 ### Company Home Special Handling
 - **Direct Lucene queries**: Company Home children are fetched using `PATH:"/app:company_home/*"` for guaranteed reliability
 - **No parent resolution needed**: Bypasses any parent association issues for the root node
 - **Universal compatibility**: Works regardless of nodeRef format or Alfresco version
 
-### Enhanced Parent Association Discovery
-For all other folders, the library uses intelligent parent detection:
+### Direct SOAP Navigation for All Other Folders
+For Sites, Data Dictionary, User Homes, and all other folders:
 
-- **Metadata inclusion**: Requests node data with `includeMetadata: true` to get complete association information
-- **Multiple association types**: Looks for parent relationships in:
-  - Direct parent fields (`node.parent`, `node.parentNodeRef`)
-  - Association arrays (`node.associations` with `cm:contains` type)
-  - Child associations (`node.childAssociations` for reverse lookup)
-  - Primary parent references (`node.primaryParent`)
-- **Robust fallback**: If metadata fails, falls back to basic node data
-- **Debug logging**: Detailed logging shows exactly what association data is available
+- **Native `queryChildren` method**: Uses Alfresco's official SOAP operation designed specifically for getting folder children
+- **WSDL-compliant parameters**: Calls `queryChildren({ node: { store: { scheme, address }, uuid: id } })`
+- **Single SOAP call**: No complex path resolution or parent chain traversal required
+- **Reliable data extraction**: Processes `queryReturn.resultSet` response format consistently
+- **Works with any nodeRef**: Sites, custom folders, deep hierarchies - everything works the same way
 
-### Path Resolution Strategy
-- **Recursive building**: Constructs full Lucene paths (e.g., `/app:company_home/st:sites/cm:MySite`)
-- **Generic approach**: No hardcoded nodeRefs - works with any Alfresco repository structure
-- **Association-aware**: Uses proper Alfresco association types (`cm:contains`, etc.)
-- **Error handling**: Clear error messages and debug information for troubleshooting
+### Additional SOAP Operations
+The library also provides:
+
+- **`queryParents`**: Gets parent nodes using the official SOAP method
+- **`get`**: Retrieves individual nodes with proper Predicate structure
+- **`query`**: Executes Lucene queries with full WSDL compliance
+
+### Why This Approach Works
+- **Official Alfresco API**: Uses methods designed by Alfresco for exactly this purpose
+- **No reverse engineering**: No need to guess parent associations or build complex paths
+- **Server-optimized**: Alfresco handles all the complex relationship resolution internally
+- **Consistent across versions**: WSDL specification ensures compatibility
 
 ## Troubleshooting
 
-- **Parent resolution errors**: If you see "Cannot resolve parent" errors, check the debug logs for detailed information about what association data is available. The library now checks multiple association types and fields.
-- **Enhanced debugging**: The library logs detailed information about node associations to help identify why parent resolution might fail in specific cases.
-- If you see errors like `Cannot resolve parent for nodeRef: ...` or `Node has no name: ...`, check your Alfresco repository for orphaned nodes or nodes missing required properties. **Note:** This should be rare with the enhanced parent detection system.
-- The library logs detailed errors to help you identify problematic nodeRefs and understand why navigation failed.
-- If you hit the recursion limit, your repository may have a circular parent reference or be corrupted.
-- For migration or export, always check logs for any skipped or errored nodes.
-- **NodeRef format:** If you see errors about invalid nodeRef format, ensure you are passing nodeRefs in the form `workspace://SpacesStore/UUID`. The library will handle parsing and SOAP compatibility internally.
-- **WSDL compliance:** If you are customizing the library or using advanced features, refer to the Alfresco RepositoryService WSDL. The library's `get` method always uses `{ where: { nodes: [ { store, uuid } ] } }` for node lookups, as required by Alfresco SOAP.
-- **Empty results or missing node data:** If you're getting empty arrays or objects with missing properties, ensure your Alfresco server is configured correctly and the user has proper permissions. The library's robust data extraction should handle most SOAP response variations automatically.
-- **Association data**: If parent resolution fails, check that your user account has permissions to read node associations and that the Alfresco SOAP API is configured to return metadata.
+- **SOAP method errors**: All SOAP methods now strictly follow the WSDL specification. If you encounter method errors, verify your Alfresco server's SOAP API is enabled and accessible.
+- **Navigation errors**: The library uses native `queryChildren` for folder navigation. If folders don't load, check that the user has permission to access the folder's children.
+- **Node access errors**: If you see "Node not found" errors, verify the nodeRef exists and the user has read permissions.
+- **WSDL compliance**: All SOAP calls follow the official Alfresco RepositoryService WSDL. The library automatically formats nodeRefs and parameters correctly.
+- **Empty results**: If folders appear empty, check user permissions and that the Alfresco SOAP API is returning data correctly.
+- **NodeRef format:** Ensure nodeRefs are in the form `workspace://SpacesStore/UUID`. The library handles parsing and SOAP formatting automatically.
+- **Authentication**: Verify your credentials and that the user account has access to the folders you're trying to browse.
 
 ## Notes
 - This package is **Node.js only**. Do not import it in browser code.
 - Use in Next.js API routes, Express, or any Node.js backend.
 - All methods return normalized, developer-friendly data structures.
-- `getChildren` now works for any nodeRef with enhanced parent association detection, so you can browse Sites, User Homes, Data Dictionary, and all subfolders/files across any Alfresco installation.
-- **Generic approach**: No hardcoded nodeRefs or paths - the library dynamically discovers folder structures using proper Alfresco associations.
+- `getChildren` works reliably for any nodeRef using official Alfresco SOAP methods, so you can browse Sites, User Homes, Data Dictionary, and all subfolders/files.
+- **WSDL-compliant**: All SOAP operations strictly follow the Alfresco RepositoryService WSDL specification for maximum compatibility.
+- **No custom workarounds**: Uses only official Alfresco API methods as intended by the platform.
 
 ## License
 

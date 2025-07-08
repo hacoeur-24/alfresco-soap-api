@@ -38,22 +38,90 @@ export class RepositoryService extends SoapService {
     }
     const where = { nodes: [ { store: { scheme, address }, uuid: id } ] };
     
-    // Try to get the node with metadata to include associations/parent info
-    try {
-      const result = await this.call('get', { where, includeMetadata: true });
-      if (result && result.getReturn && Array.isArray(result.getReturn) && result.getReturn.length > 0) {
-        return result.getReturn[0];
-      }
-    } catch (metadataError) {
-      console.warn(`[alfresco-soap-api] Failed to get node with metadata, trying without:`, metadataError);
-    }
-    
-    // Fallback: try without metadata
+    // Use the standard get method (no includeMetadata parameter)
     const result = await this.call('get', { where });
     if (result && result.getReturn && Array.isArray(result.getReturn) && result.getReturn.length > 0) {
       return result.getReturn[0];
     }
     throw new Error('Node not found for nodeRef: ' + nodeRef);
+  }
+
+  async queryChildren(nodeRef: string): Promise<any[]> {
+    await this.init();
+    if (!nodeRef || typeof nodeRef !== 'string' || !nodeRef.includes('://')) {
+      throw new Error('Invalid nodeRef: ' + nodeRef);
+    }
+    const [scheme, rest] = nodeRef.split('://');
+    const [address, id] = rest.includes('/') ? rest.split('/') : [rest, undefined];
+    if (!scheme || !address || !id) {
+      throw new Error('Invalid nodeRef format: ' + nodeRef);
+    }
+    
+    // Use the Alfresco SOAP queryChildren method
+    const node = { store: { scheme, address }, uuid: id };
+    const result = await this.call('queryChildren', { node });
+    
+    // Extract children from the query result
+    if (result && result.queryReturn && result.queryReturn.resultSet) {
+      const rows = result.queryReturn.resultSet.rows || result.queryReturn.resultSet.row || [];
+      const childrenArray = Array.isArray(rows) ? rows : [rows];
+      return childrenArray.filter(row => row).map((row: any) => {
+        // Extract nodeRef and other data from columns
+        const getCol = (needle: string) => row.columns?.find((c: any) => c.name && c.name.includes(needle))?.value;
+        const protocol = getCol('store-protocol');
+        const identifier = getCol('store-identifier');
+        const uuid = getCol('node-uuid');
+        const nodeRef = protocol && identifier && uuid ? `${protocol}://${identifier}/${uuid}` : row.nodeRef;
+        const name = row.name || getCol('name') || getCol('cm:name');
+        const type = row.type || getCol('type') || getCol('cm:type');
+        
+        return {
+          nodeRef: nodeRef || 'unknown',
+          name: name || 'Unknown',
+          type: type || 'unknown',
+          properties: row.properties || {},
+        };
+      }).filter(node => node.nodeRef !== 'unknown');
+    }
+    return [];
+  }
+
+  async queryParents(nodeRef: string): Promise<any[]> {
+    await this.init();
+    if (!nodeRef || typeof nodeRef !== 'string' || !nodeRef.includes('://')) {
+      throw new Error('Invalid nodeRef: ' + nodeRef);
+    }
+    const [scheme, rest] = nodeRef.split('://');
+    const [address, id] = rest.includes('/') ? rest.split('/') : [rest, undefined];
+    if (!scheme || !address || !id) {
+      throw new Error('Invalid nodeRef format: ' + nodeRef);
+    }
+    
+    // Use the Alfresco SOAP queryParents method
+    const node = { store: { scheme, address }, uuid: id };
+    const result = await this.call('queryParents', { node });
+    
+    // Extract parents from the query result
+    if (result && result.queryReturn && result.queryReturn.resultSet) {
+      const rows = result.queryReturn.resultSet.rows || result.queryReturn.resultSet.row || [];
+      const parentsArray = Array.isArray(rows) ? rows : [rows];
+      return parentsArray.filter(row => row).map((row: any) => {
+        // Extract nodeRef and other data from columns
+        const getCol = (needle: string) => row.columns?.find((c: any) => c.name && c.name.includes(needle))?.value;
+        const protocol = getCol('store-protocol');
+        const identifier = getCol('store-identifier');
+        const uuid = getCol('node-uuid');
+        const nodeRef = protocol && identifier && uuid ? `${protocol}://${identifier}/${uuid}` : row.nodeRef;
+        const name = row.name || getCol('name') || getCol('cm:name');
+        
+        return {
+          nodeRef: nodeRef || 'unknown',
+          name: name || 'Unknown',
+          properties: row.properties || {},
+        };
+      }).filter(node => node.nodeRef !== 'unknown');
+    }
+    return [];
   }
 
   async getRootChildren(_store: string): Promise<any[]> {
@@ -65,22 +133,6 @@ export class RepositoryService extends SoapService {
       type: 'cm:folder',
       properties: {},
     }];
-  }
-
-  async getNodeChildren(nodeRef: string): Promise<any[]> {
-    await this.init();
-    // Use the Alfresco SOAP getChildren method to fetch children by nodeRef
-    const result = await this.call('getChildren', { nodeRef });
-    let children = result.getChildrenReturn || result.children || result.nodes || [];
-    if (!Array.isArray(children)) children = [children];
-    return children
-      .filter((node: any) => node && node.nodeRef)
-      .map((node: any) => ({
-        nodeRef: node.nodeRef,
-        name: node.name || node.properties?.['cm:name'] || node.nodeRef,
-        type: node.type,
-        properties: node.properties,
-      }));
   }
 }
 

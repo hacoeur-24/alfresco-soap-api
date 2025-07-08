@@ -88,108 +88,6 @@ function normalizeNodeRef(ref: string) {
   return (ref || '').trim().toLowerCase();
 }
 
-// Helper: recursively resolve the full Lucene path for a nodeRef (robust version)
-async function resolvePathForNodeRef(client: AlfrescoClient, nodeRef: string, depth = 0, companyHomeNodeRef?: string): Promise<string> {
-  if (!nodeRef || typeof nodeRef !== 'string') {
-    console.error(`[alfresco-soap-api] resolvePathForNodeRef: Invalid nodeRef:`, nodeRef);
-    throw new Error('Invalid nodeRef passed to resolvePathForNodeRef');
-  }
-  if (depth > 50) {
-    // Prevent infinite recursion
-    throw new Error('Max recursion depth reached in resolvePathForNodeRef for nodeRef: ' + nodeRef);
-  }
-  await client.authenticate();
-  let node;
-  try {
-    node = await client.repoService.get(nodeRef);
-  } catch (err) {
-    console.error(`[alfresco-soap-api] Failed to fetch node for nodeRef: ${nodeRef}`, err);
-    throw new Error('Failed to fetch node for nodeRef: ' + nodeRef);
-  }
-  // If this is company_home, return /app:company_home
-  if (
-    (companyHomeNodeRef && normalizeNodeRef(nodeRef) === normalizeNodeRef(companyHomeNodeRef)) ||
-    (node.nodeRef && companyHomeNodeRef && normalizeNodeRef(node.nodeRef) === normalizeNodeRef(companyHomeNodeRef)) ||
-    (node.properties && (node.properties['app:icon'] === 'company_home' || node.name === 'Company Home'))
-  ) {
-    return '/app:company_home';
-  }
-  // If this is the root, return '/'
-  if (node.nodeRef && node.nodeRef.endsWith('://root')) return '/';
-  // Try to find parent nodeRef - check multiple possible locations
-  let parentAssoc =
-    node.parent ||
-    node.parentNodeRef ||
-    node.properties?.['cm:parent'] ||
-    node.properties?.['cm:parentAssoc'] ||
-    (node.aspects && node.aspects['cm:parent']) ||
-    undefined;
-    
-  if (!parentAssoc) {
-    // Try to find parent from associations array
-    if (node.associations && Array.isArray(node.associations)) {
-      const parentAssocObj = node.associations.find((a: any) => 
-        a.associationType && (
-          a.associationType.includes('parent') || 
-          a.associationType.includes('contains') ||
-          a.associationType === 'cm:contains'
-        )
-      );
-      if (parentAssocObj && parentAssocObj.target) {
-        parentAssoc = parentAssocObj.target;
-      }
-    }
-  }
-  
-  if (!parentAssoc) {
-    // Try to find parent from child associations (reverse lookup)
-    if (node.childAssociations && Array.isArray(node.childAssociations)) {
-      const parentFromChild = node.childAssociations.find((a: any) => 
-        a.source && a.source !== nodeRef
-      );
-      if (parentFromChild && parentFromChild.source) {
-        parentAssoc = parentFromChild.source;
-      }
-    }
-  }
-  
-  if (!parentAssoc) {
-    // Check if this node has primary parent info
-    if (node.primaryParent) {
-      parentAssoc = node.primaryParent;
-    }
-  }
-  
-  // Debug: log what we found for this node to help troubleshoot
-  console.log(`[alfresco-soap-api] Node ${nodeRef} debug:`, {
-    name: node.name || node.properties?.['cm:name'],
-    hasParent: !!node.parent,
-    hasParentNodeRef: !!node.parentNodeRef,
-    hasAssociations: !!node.associations,
-    hasChildAssociations: !!node.childAssociations,
-    hasPrimaryParent: !!node.primaryParent,
-    foundParentAssoc: !!parentAssoc,
-    parentAssoc: parentAssoc
-  });
-  
-  if (!parentAssoc) {
-    console.error(`[alfresco-soap-api] Could not resolve parent for nodeRef: ${nodeRef}`);
-    throw new Error('Cannot resolve parent for nodeRef: ' + nodeRef);
-  }
-  // Recursively resolve parent path
-  const parentPath = await resolvePathForNodeRef(client, parentAssoc, depth + 1, companyHomeNodeRef);
-  // Get this node's name (cm:name)
-  const nodeName = node.name || node.properties?.['cm:name'];
-  if (!nodeName) {
-    console.error(`[alfresco-soap-api] Node has no name: ${nodeRef}`);
-    throw new Error('Node has no name: ' + nodeRef);
-  }
-  // Alfresco path elements are prefixed with cm: or other namespace
-  const type = node.type || node.properties?.['cm:type'];
-  const ns = type && type.startsWith('cm:') ? 'cm:' : '';
-  return parentPath.endsWith('/') ? `${parentPath}${ns}${nodeName}` : `${parentPath}/${ns}${nodeName}`;
-}
-
 export async function getChildren(client: AlfrescoClient, nodeRef: NodeRef): Promise<any[]> {
   await client.authenticate();
 
@@ -217,22 +115,14 @@ export async function getChildren(client: AlfrescoClient, nodeRef: NodeRef): Pro
     return extractedNodes;
   }
 
-  // For all other nodes, use path resolution approach with improved parent detection
+  // For all other nodes, use the proper Alfresco SOAP queryChildren method
   try {
-    const path = await resolvePathForNodeRef(client, nodeRef, 0, companyHomeNodeRef);
-    const query = {
-      language: 'lucene',
-      statement: `PATH:"${path}/*"`,
-    };
-    const storeObj = { scheme: client.config.scheme, address: client.config.address };
-    const result = await client.repoService.query(storeObj, query, false);
-    
-    // Extract nodes from the SOAP response
-    const extractedNodes = extractNodesFromQueryResponse(result);
-    return extractedNodes;
-  } catch (pathError) {
-    console.error(`[alfresco-soap-api] Path-based getChildren failed for ${nodeRef}:`, pathError);
-    throw new Error(`Failed to get children for nodeRef ${nodeRef}: ${(pathError as Error).message}`);
+    console.log(`[alfresco-soap-api] Using direct queryChildren SOAP method for nodeRef: ${nodeRef}`);
+    const children = await client.repoService.queryChildren(nodeRef);
+    return children; // This already returns properly formatted objects
+  } catch (queryChildrenError) {
+    console.error(`[alfresco-soap-api] queryChildren failed for ${nodeRef}:`, queryChildrenError);
+    throw new Error(`Failed to get children for nodeRef ${nodeRef}: ${(queryChildrenError as Error).message}`);
   }
 }
 
