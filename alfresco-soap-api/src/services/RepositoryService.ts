@@ -5,10 +5,19 @@ export class RepositoryService extends SoapService {
     super(`${baseUrl}/alfresco/api/RepositoryService?wsdl`);
   }
 
-  async getStores(): Promise<any> {
+  async getStores(): Promise<any[]> {
     await this.init();
     const result = await this.call('getStores', {});
-    return result.stores || result;
+    if (Array.isArray(result)) {
+      return result;
+    } else if (result.getStoresReturn) {
+      return result.getStoresReturn;
+    } else if (result.store) {
+      return result.store;
+    } else if (result.stores) {
+      return result.stores;
+    }
+    return [];
   }
 
   async query(store: any, query: any, includeMetaData: boolean): Promise<any> {

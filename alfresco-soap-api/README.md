@@ -1,5 +1,7 @@
 # alfresco-soap-api
 
+[![GitHub](https://img.shields.io/badge/GitHub-Repository-blue?logo=github)](https://github.com/hacoeur-24/alfresco-soap-api)
+
 A TypeScript library for connecting to Alfresco Content Services via the SOAP API. **Node.js only**—use in Next.js API routes, Express, serverless, etc.
 
 ## Features
@@ -7,6 +9,7 @@ A TypeScript library for connecting to Alfresco Content Services via the SOAP AP
 - Query nodes, fetch children, and navigate the repository
 - TypeScript types for StoreRef, NodeRef, and more
 - No hardcoded nodeRefs or credentials—fully configurable
+- **Consistent, normalized return values** for all methods (always arrays/objects, never SOAP-wrapped responses)
 
 ## Installation
 
@@ -38,12 +41,20 @@ export async function GET() {
 
 - `AlfrescoClient(config)` — Create a new client instance
 - `getCompanyHome(client)` — Get the Company Home node
-- `getChildren(client, nodeRef)` — Get children of a node
+- `getChildren(client, nodeRef)` — Get children of a node (always returns an array)
 - `authenticate(client)` — Authenticate and get a ticket
+
+## Example Project
+
+A full-stack example using this library in a Next.js app is provided in the [`nextjs-example`](../nextjs-example) folder.
+
+- See [`nextjs-example/README.md`](../nextjs-example/README.md) for setup and usage instructions.
+- The example demonstrates how to use this library in Next.js API routes and connect a React frontend to Alfresco.
 
 ## Notes
 - This package is **Node.js only**. Do not import it in browser code.
 - Use in Next.js API routes, Express, or any Node.js backend.
+- All methods return normalized, developer-friendly data structures.
 
 ## License
 
