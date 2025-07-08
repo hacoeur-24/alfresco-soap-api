@@ -116,33 +116,16 @@ async function resolvePathForNodeRef(client: AlfrescoClient, nodeRef: string, de
 export async function getChildren(client: AlfrescoClient, nodeRef: NodeRef): Promise<any[]> {
   await client.authenticate();
 
-  // If nodeRef is a Lucene path for company home, use it directly
-  if (nodeRef === '/app:company_home' || nodeRef === '/app:company_home/*') {
-    const path = '/app:company_home/*';
-    const query = {
-      language: 'lucene',
-      statement: `PATH:"${path}"`,
-    };
-    const storeObj = { scheme: client.config.scheme, address: client.config.address };
-    const result = await client.repoService.query(storeObj, query, false);
-    const nodes = result.queryReturn || result.nodes || [];
-    const arr = Array.isArray(nodes) ? nodes : [nodes];
-    return arr.map((node: any) => ({
-      nodeRef: node.nodeRef,
-      name: node.name || node.properties?.['cm:name'] || node.nodeRef,
-      type: node.type,
-      properties: node.properties,
-    }));
-  }
-
-  // Fetch Company Home nodeRef for robust root detection
+  // Always treat Company Home nodeRef as special
   const companyHome = await getCompanyHome(client);
-  const companyHomeNodeRef = companyHome.nodeRef;
+  const companyHomeNodeRef = companyHome?.nodeRef;
+  const normalizedNodeRef = normalizeNodeRef(nodeRef);
+  const normalizedCompanyHomeNodeRef = normalizeNodeRef(companyHomeNodeRef);
 
-  // Special case: If nodeRef matches Company Home nodeRef, use the known Lucene path
   if (
-    (companyHomeNodeRef && normalizeNodeRef(nodeRef) === normalizeNodeRef(companyHomeNodeRef)) ||
-    (nodeRef && nodeRef.endsWith('://root'))
+    normalizedNodeRef === '/app:company_home' ||
+    normalizedNodeRef === '/app:company_home/*' ||
+    normalizedNodeRef === normalizedCompanyHomeNodeRef
   ) {
     const path = '/app:company_home/*';
     const query = {
@@ -161,7 +144,7 @@ export async function getChildren(client: AlfrescoClient, nodeRef: NodeRef): Pro
     }));
   }
 
-  // Normal case: resolve path recursively
+  // All other cases: resolve path recursively
   const path = await resolvePathForNodeRef(client, nodeRef, 0, companyHomeNodeRef);
   const query = {
     language: 'lucene',

@@ -14,7 +14,7 @@ A TypeScript library for connecting to Alfresco Content Services via the SOAP AP
 - **Robust recursive path resolution**: `getChildren` can traverse all folders and subfolders, making it ideal for migration and full repository traversal
 - **Automatic nodeRef normalization**: All nodeRefs are parsed and passed to the Alfresco SOAP API in the correct `{ scheme, address, uuid }` format, so you never have to worry about SOAP compatibility
 - **WSDL-compliant get method**: The library's `get` method uses the correct Predicate structure (`{ where: { nodes: [ { store, uuid } ] } }`) for all node lookups, matching the Alfresco RepositoryService WSDL
-- **Root node (Company Home) detection**: The library robustly detects Company Home by nodeRef (with normalization for case and whitespace), by properties, or by the Lucene path `/app:company_home` or `/app:company_home/*`. When fetching its children, it directly queries `/app:company_home/*` instead of trying to resolve its parent. This guarantees navigation from the repository root always works, even if nodeRef formatting varies or a Lucene path is passed.
+- **Root node (Company Home) detection**: The library always treats Company Home as a special case: if the nodeRef matches the known Company Home nodeRef (normalized), or is `/app:company_home` or `/app:company_home/*`, it will always use the Lucene path `/app:company_home/*` to fetch children. This guarantees navigation from the repository root always works, regardless of nodeRef format or how Company Home is referenced.
 
 ## Installation
 
@@ -61,7 +61,7 @@ A full-stack example using this library in a Next.js app is provided in the [`ne
 Alfresco's SOAP API does not provide a direct way to fetch children for any nodeRef. This library implements a robust recursive path resolution algorithm:
 
 - For any nodeRef, the library will recursively fetch the node and its parent chain, building the full Lucene path (e.g., `/app:company_home/cm:Sites/cm:MySite`).
-- **Special handling for Company Home/root nodes:** The library detects Company Home by nodeRef (using normalization for case and whitespace), by properties, or by the Lucene path `/app:company_home` or `/app:company_home/*`. When fetching its children, it directly queries `/app:company_home/*` instead of trying to resolve its parent. This prevents errors like "Could not resolve parent for nodeRef: ..." when browsing from the repository root, even if nodeRef formatting is inconsistent or a Lucene path is passed, and guarantees navigation from the root always works.
+- **Special handling for Company Home/root nodes:** The library always treats Company Home as a special case: if the nodeRef matches the known Company Home nodeRef (normalized), or is `/app:company_home` or `/app:company_home/*`, it will always use the Lucene path `/app:company_home/*` to fetch children. This prevents errors like "Could not resolve parent for nodeRef: ..." when browsing from the repository root, regardless of nodeRef formatting or how Company Home is referenced, and guarantees navigation from the root always works.
 - This path is then used in a Lucene query to fetch children, enabling navigation and traversal for all folders, subfolders, and files.
 - This approach is industry standard for Alfresco integrations and is essential for migration, export, and deep traversal use cases.
 - The implementation includes defensive checks, logging, and a recursion limit to prevent infinite loops and help debug edge cases.
