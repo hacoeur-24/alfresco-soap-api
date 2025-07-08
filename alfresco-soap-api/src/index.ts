@@ -178,18 +178,31 @@ export async function getChildren(client: AlfrescoClient, nodeRef: NodeRef): Pro
     return extractedNodes;
   }
 
-  // All other cases: resolve path recursively
-  const path = await resolvePathForNodeRef(client, nodeRef, 0, companyHomeNodeRef);
-  const query = {
-    language: 'lucene',
-    statement: `PATH:"${path}/*"`,
-  };
-  const storeObj = { scheme: client.config.scheme, address: client.config.address };
-  const result = await client.repoService.query(storeObj, query, false);
-  
-  // Extract nodes from the SOAP response
-  const extractedNodes = extractNodesFromQueryResponse(result);
-  return extractedNodes;
+  // For all other nodes, try direct SOAP getChildren first (much more reliable)
+  try {
+    const children = await client.repoService.getNodeChildren(nodeRef);
+    return children; // This already returns properly formatted objects
+  } catch (directError) {
+    console.warn(`[alfresco-soap-api] Direct getChildren failed for ${nodeRef}, falling back to Lucene query:`, directError);
+    
+    // Fallback: try the path resolution approach
+    try {
+      const path = await resolvePathForNodeRef(client, nodeRef, 0, companyHomeNodeRef);
+      const query = {
+        language: 'lucene',
+        statement: `PATH:"${path}/*"`,
+      };
+      const storeObj = { scheme: client.config.scheme, address: client.config.address };
+      const result = await client.repoService.query(storeObj, query, false);
+      
+      // Extract nodes from the SOAP response
+      const extractedNodes = extractNodesFromQueryResponse(result);
+      return extractedNodes;
+    } catch (pathError) {
+      console.error(`[alfresco-soap-api] Both direct and path-based getChildren failed for ${nodeRef}:`, pathError);
+      throw new Error(`Failed to get children for nodeRef ${nodeRef}: ${(pathError as Error).message}`);
+    }
+  }
 }
 
 // Helper function to extract nodes from query response in any shape
