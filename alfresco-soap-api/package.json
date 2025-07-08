@@ -1,6 +1,6 @@
 {
   "name": "alfresco-soap-api",
-  "version": "1.1.4",
+  "version": "1.1.5",
   "description": "Alfresco SOAP API client for Node.js (for use in Next.js API routes, Express, etc.)",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

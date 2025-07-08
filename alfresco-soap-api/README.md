@@ -14,7 +14,7 @@ A TypeScript library for connecting to Alfresco Content Services via the SOAP AP
 - **Robust recursive path resolution**: `getChildren` can traverse all folders and subfolders, making it ideal for migration and full repository traversal
 - **Automatic nodeRef normalization**: All nodeRefs are parsed and passed to the Alfresco SOAP API in the correct `{ scheme, address, uuid }` format, so you never have to worry about SOAP compatibility
 - **WSDL-compliant get method**: The library's `get` method uses the correct Predicate structure (`{ where: { nodes: [ { store, uuid } ] } }`) for all node lookups, matching the Alfresco RepositoryService WSDL
-- **Root node (Company Home) detection**: The library always treats Company Home as a special case: if the nodeRef matches the known Company Home nodeRef (normalized), or is `/app:company_home` or `/app:company_home/*`, it will always use the Lucene path `/app:company_home/*` to fetch children. This guarantees navigation from the repository root always works, regardless of nodeRef format or how Company Home is referenced.
+- **Root node (Company Home) detection**: The library always treats Company Home as a special case. `getCompanyHome` **guarantees** it can extract the `nodeRef` from any Alfresco SOAP response shape (array, resultSet rows, etc.). If the SOAP payload does not include `nodeRef`, the library reconstructs it from the returned columns. As soon as the lookup succeeds, all subsequent logic uses the Lucene path `/app:company_home/*` to fetch children. This makes initial navigation from the repository root _bullet-proof_, regardless of nodeRef formatting or how Company Home is referenced.
 
 ## Installation
 
@@ -45,7 +45,7 @@ export async function GET() {
 ## API
 
 - `AlfrescoClient(config)` — Create a new client instance (pass your Alfresco URL, username, password, scheme, and address)
-- `getCompanyHome(client)` — Get the Company Home node
+- `getCompanyHome(client)` — Get the Company Home node. **Returns** `{ nodeRef, name }` where `nodeRef` is guaranteed to be present.
 - `getChildren(client, nodeRef)` — Get children of a node (always returns an array, works for any folder/nodeRef by resolving the full path recursively)
 - `authenticate(client)` — Authenticate and get a ticket
 

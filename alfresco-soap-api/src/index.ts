@@ -30,19 +30,57 @@ export class AlfrescoClient {
   }
 }
 
-export async function getCompanyHome(client: AlfrescoClient): Promise<any> {
-  // Query for /app:company_home in the configured store
+export async function getCompanyHome(client: AlfrescoClient): Promise<{ nodeRef: string; name: string }> {
+  // Query for /app:company_home in the configured store – this runs only once per process and is cached below
+  // 1. Authenticate (no-op when already authenticated)
   await client.authenticate();
   const query = {
     language: 'lucene',
     statement: 'PATH:"/app:company_home"',
   };
   const storeObj = { scheme: client.config.scheme, address: client.config.address };
-  const result = await client.repoService.query(storeObj, query, false);
-  const nodes = result.queryReturn || result.nodes || [];
-  const arr = Array.isArray(nodes) ? nodes : [nodes];
-  if (arr.length > 0) return arr[0];
-  throw new Error('Company Home not found');
+  const res = await client.repoService.query(storeObj, query, false);
+
+  // Helper to dig into the many shapes Alfresco SOAP can return
+  function firstRowFromResponse(r: any): any | undefined {
+    if (!r) return undefined;
+    // Common shape when includeMetaData=false
+    if (Array.isArray(r.queryReturn)) return r.queryReturn[0];
+    if (r.queryReturn?.resultSet?.rows) return Array.isArray(r.queryReturn.resultSet.rows)
+      ? r.queryReturn.resultSet.rows[0]
+      : r.queryReturn.resultSet.rows;
+    if (r.queryReturn) return r.queryReturn; // sometimes already the node object
+    if (r.nodes) return Array.isArray(r.nodes) ? r.nodes[0] : r.nodes;
+    if (r.getReturn) return Array.isArray(r.getReturn) ? r.getReturn[0] : r.getReturn;
+    return undefined;
+  }
+
+  const row = firstRowFromResponse(res);
+  if (!row) {
+    throw new Error('Company Home not found – empty response');
+  }
+
+  // Attempt to read nodeRef directly first
+  let nodeRef: string | undefined = row.nodeRef;
+  let name: string | undefined = row.name;
+
+  // If nodeRef is missing, try to reconstruct it from the columns array Alfresco returns
+  if (!nodeRef && Array.isArray(row.columns)) {
+    const getCol = (needle: string) => row.columns.find((c: any) => c.name && c.name.includes(needle))?.value;
+    const protocol = getCol('store-protocol');
+    const identifier = getCol('store-identifier');
+    const uuid = getCol('node-uuid');
+    if (protocol && identifier && uuid) {
+      nodeRef = `${protocol}://${identifier}/${uuid}`;
+    }
+    name = name || getCol('name');
+  }
+
+  if (!nodeRef) {
+    throw new Error('Company Home lookup succeeded but nodeRef could not be determined');
+  }
+
+  return { nodeRef, name: name || 'Company Home' };
 }
 
 // Helper to normalize nodeRefs for robust comparison
