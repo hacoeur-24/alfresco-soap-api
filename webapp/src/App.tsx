@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { getRootNodeRef } from './alfrescoServer';
 
 // Color palette from image
 const COLORS = {
@@ -12,7 +13,6 @@ const COLORS = {
 
 interface Store {
   address: string;
-  // protocol: string; // Removed
 }
 
 function App() {
@@ -20,6 +20,12 @@ function App() {
   const [selectedStore, setSelectedStore] = useState<Store | null>(null);
   const [, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // New state for root nodes in sidebar
+  const [rootNodes, setRootNodes] = useState<any[]>([]);
+  const [sidebarLoading, setSidebarLoading] = useState(false);
+  const [sidebarError, setSidebarError] = useState<string | null>(null);
+  const [currentNodeRef, setCurrentNodeRef] = useState<string | null>(null);
+  const [nodeStack, setNodeStack] = useState<string[]>([]); // for navigation
 
   const fetchStores = async () => {
     setLoading(true);
@@ -62,6 +68,51 @@ function App() {
     document.documentElement.style.height = '100vh';
     // eslint-disable-next-line
   }, []);
+
+  // On mount, fetch and set the root nodeRef
+  useEffect(() => {
+    getRootNodeRef().then(ref => {
+      setCurrentNodeRef(ref);
+      setNodeStack([ref]);
+    }).catch(err => {
+      setSidebarError('Failed to get root node: ' + err.message);
+    });
+    // eslint-disable-next-line
+  }, []);
+
+  // Fetch children of the current node
+  useEffect(() => {
+    if (!currentNodeRef) {
+      setRootNodes([]);
+      setSidebarError(null);
+      return;
+    }
+    setSidebarLoading(true);
+    setSidebarError(null);
+    fetch(`/nodes/${encodeURIComponent(currentNodeRef)}/children`)
+      .then(res => {
+        if (!res.ok) throw new Error('Failed to fetch node children');
+        return res.json();
+      })
+      .then(data => {
+        let nodes = [];
+        if (Array.isArray(data)) {
+          nodes = data;
+        } else if (data.children) {
+          nodes = data.children;
+        } else if (data.getChildrenReturn) {
+          nodes = data.getChildrenReturn;
+        } else {
+          nodes = data;
+        }
+        setRootNodes(nodes);
+      })
+      .catch(err => {
+        setSidebarError(err.message);
+        setRootNodes([]);
+      })
+      .finally(() => setSidebarLoading(false));
+  }, [currentNodeRef]);
 
   // Modal for error
   const ErrorModal = ({ message, onClose }: { message: string; onClose: () => void }) => (
@@ -162,18 +213,57 @@ function App() {
         {/* Sidebar */}
         {!error && (
           <aside style={{ width: 240, background: COLORS.sidebarBg, padding: '24px 0', boxSizing: 'border-box', borderRight: `2px solid ${COLORS.sidebar}` }}>
-            {selectedStore ? (
-              <>
-                <div style={{ color: COLORS.sidebar, textAlign: 'center', fontWeight: 700, fontSize: 18, marginBottom: 12 }}>
-                  {selectedStore.address}
-                </div>
-                <hr style={{ border: 0, borderTop: `1.5px solid ${COLORS.sidebar}`, margin: '0 16px 0 16px', marginBottom: 0 }} />
-              </>
-            ) : (
-              <div style={{ color: COLORS.text, textAlign: 'center', opacity: 0.5 }}>
-                Select a store to view sidebar
-              </div>
-            )}
+            {/* Navigation header */}
+            <div style={{ color: COLORS.sidebar, textAlign: 'center', fontWeight: 700, fontSize: 18, marginBottom: 12 }}>
+              {nodeStack.length > 1 && (
+                <button
+                  onClick={() => {
+                    if (nodeStack.length > 1) {
+                      const newStack = [...nodeStack];
+                      newStack.pop();
+                      setNodeStack(newStack);
+                      setCurrentNodeRef(newStack[newStack.length - 1]);
+                    }
+                  }}
+                  style={{ marginRight: 8, background: 'none', border: 'none', color: COLORS.sidebar, cursor: 'pointer', fontSize: 18 }}
+                  aria-label="Back"
+                >
+                  ←
+                </button>
+              )}
+              {rootNodes.length > 0 ? (rootNodes[0].parentName || 'Browse') : 'Browse'}
+            </div>
+            <hr style={{ border: 0, borderTop: `1.5px solid ${COLORS.sidebar}`, margin: '0 16px 0 16px', marginBottom: 0 }} />
+            {/* Node children list */}
+            <div style={{ marginTop: 16, padding: '0 16px' }}>
+              {sidebarLoading ? (
+                <div style={{ color: COLORS.text, opacity: 0.7, textAlign: 'center' }}>Loading...</div>
+              ) : sidebarError ? (
+                <div style={{ color: 'red', fontSize: 14, textAlign: 'center' }}>{sidebarError}</div>
+              ) : rootNodes.length === 0 ? (
+                <div style={{ color: COLORS.text, opacity: 0.5, textAlign: 'center' }}>No nodes</div>
+              ) : (
+                <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                  {rootNodes.map((node: any, idx: number) => (
+                    <li key={node.nodeRef || idx} style={{
+                      padding: '8px 0',
+                      borderBottom: `1px solid ${COLORS.sidebarBg}`,
+                      color: COLORS.text,
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                      transition: 'background 0.15s',
+                    }}
+                    onClick={() => {
+                      setNodeStack([...nodeStack, node.nodeRef]);
+                      setCurrentNodeRef(node.nodeRef);
+                    }}
+                    >
+                      {node.name || node.nodeRef}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </aside>
         )}
         {/* Main Content */}

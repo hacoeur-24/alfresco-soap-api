@@ -35,6 +35,52 @@ async function bootstrap() {
     }
   });
 
+  // API endpoint: GET /stores/:storeId/root-nodes
+  app.get('/stores/:storeId/root-nodes', async (req, res) => {
+    try {
+      const { storeId } = req.params;
+      const children = await repositoryService.getRootChildren(storeId);
+      res.json(children);
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
+  // API endpoint: GET /nodes/:nodeRef/children
+  app.get('/nodes/:nodeRef/children', async (req, res) => {
+    try {
+      const { nodeRef } = req.params;
+      // nodeRef may be URL-encoded, decode it
+      const decodedNodeRef = decodeURIComponent(nodeRef);
+      const children = await repositoryService.getNodeChildren(decodedNodeRef);
+      res.json(children);
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
+  // API endpoint: GET /company-home-noderef
+  app.get('/company-home-noderef', async (req, res) => {
+    try {
+      // Always use SpacesStore for this query
+      const query = {
+        language: 'lucene',
+        statement: 'PATH:"/app:company_home"',
+      };
+      const storeObj = { scheme: 'workspace', address: 'SpacesStore' };
+      const result = await repositoryService.query(storeObj, query, false);
+      const nodes = result.queryReturn || result.nodes || [];
+      const arr = Array.isArray(nodes) ? nodes : [nodes];
+      if (arr.length > 0 && arr[0].nodeRef) {
+        res.json({ nodeRef: arr[0].nodeRef });
+      } else {
+        res.status(404).json({ error: 'Company Home node not found' });
+      }
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
   app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });
