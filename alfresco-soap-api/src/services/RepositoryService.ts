@@ -37,6 +37,18 @@ export class RepositoryService extends SoapService {
       throw new Error('Invalid nodeRef format: ' + nodeRef);
     }
     const where = { nodes: [ { store: { scheme, address }, uuid: id } ] };
+    
+    // Try to get the node with metadata to include associations/parent info
+    try {
+      const result = await this.call('get', { where, includeMetadata: true });
+      if (result && result.getReturn && Array.isArray(result.getReturn) && result.getReturn.length > 0) {
+        return result.getReturn[0];
+      }
+    } catch (metadataError) {
+      console.warn(`[alfresco-soap-api] Failed to get node with metadata, trying without:`, metadataError);
+    }
+    
+    // Fallback: try without metadata
     const result = await this.call('get', { where });
     if (result && result.getReturn && Array.isArray(result.getReturn) && result.getReturn.length > 0) {
       return result.getReturn[0];
