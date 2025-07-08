@@ -28,7 +28,6 @@ export class RepositoryService extends SoapService {
 
   async get(nodeRef: string): Promise<any> {
     await this.init();
-    // Parse nodeRef into scheme, address, id
     if (!nodeRef || typeof nodeRef !== 'string' || !nodeRef.includes('://')) {
       throw new Error('Invalid nodeRef: ' + nodeRef);
     }
@@ -37,7 +36,12 @@ export class RepositoryService extends SoapService {
     if (!scheme || !address || !id) {
       throw new Error('Invalid nodeRef format: ' + nodeRef);
     }
-    return this.call('get', { node: { store: { scheme, address }, id } });
+    const where = { node: [ { store: { scheme, address }, id } ] };
+    const result = await this.call('get', { where });
+    if (result && result.getReturn && Array.isArray(result.getReturn) && result.getReturn.length > 0) {
+      return result.getReturn[0];
+    }
+    throw new Error('Node not found for nodeRef: ' + nodeRef);
   }
 
   async getRootChildren(_store: string): Promise<any[]> {
