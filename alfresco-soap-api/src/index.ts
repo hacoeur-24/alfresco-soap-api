@@ -45,6 +45,11 @@ export async function getCompanyHome(client: AlfrescoClient): Promise<any> {
   throw new Error('Company Home not found');
 }
 
+// Helper to normalize nodeRefs for robust comparison
+function normalizeNodeRef(ref: string) {
+  return (ref || '').trim().toLowerCase();
+}
+
 // Helper: recursively resolve the full Lucene path for a nodeRef (robust version)
 async function resolvePathForNodeRef(client: AlfrescoClient, nodeRef: string, depth = 0, companyHomeNodeRef?: string): Promise<string> {
   if (!nodeRef || typeof nodeRef !== 'string') {
@@ -65,7 +70,8 @@ async function resolvePathForNodeRef(client: AlfrescoClient, nodeRef: string, de
   }
   // If this is company_home, return /app:company_home
   if (
-    (companyHomeNodeRef && nodeRef === companyHomeNodeRef) ||
+    (companyHomeNodeRef && normalizeNodeRef(nodeRef) === normalizeNodeRef(companyHomeNodeRef)) ||
+    (node.nodeRef && companyHomeNodeRef && normalizeNodeRef(node.nodeRef) === normalizeNodeRef(companyHomeNodeRef)) ||
     (node.properties && (node.properties['app:icon'] === 'company_home' || node.name === 'Company Home'))
   ) {
     return '/app:company_home';
