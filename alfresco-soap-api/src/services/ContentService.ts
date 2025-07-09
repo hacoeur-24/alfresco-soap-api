@@ -50,156 +50,39 @@ export class ContentService extends SoapService {
   }
 
   /**
-   * Get file content using Alfresco's hybrid SOAP+HTTP approach
-   * Step 1: Use SOAP ContentService.read to get download URL
-   * Step 2: Use the URL exactly as provided by SOAP (robust approach)
+   * Get download URL for content using SOAP ContentService.read
+   * Simple helper that extracts the download URL from SOAP response
    */
-  async getFileContent(nodeRef: string, repositoryService: any, ticket: string): Promise<ContentData> {
-    try {
-      console.log(`[ContentService] Starting hybrid SOAP+HTTP content retrieval for nodeRef: ${nodeRef}`);
-
-      // Step 1: Get node metadata for filename/type info using RepositoryService
-      const nodeDetails = await repositoryService.get(nodeRef);
-      
-      let filename = 'download';
-      let contentType = 'application/octet-stream';
-      
-      // Extract file metadata from node properties
-      if (nodeDetails.properties && Array.isArray(nodeDetails.properties)) {
-        const nameProperty = nodeDetails.properties.find((prop: any) => 
-          prop.name === '{http://www.alfresco.org/model/content/1.0}name'
-        );
-        if (nameProperty && nameProperty.value) {
-          filename = nameProperty.value;
-        }
-        
-        const contentProperty = nodeDetails.properties.find((prop: any) => 
-          prop.name === '{http://www.alfresco.org/model/content/1.0}content'
-        );
-        
-        if (contentProperty && contentProperty.value) {
-          const contentData = contentProperty.value;
-          if (typeof contentData === 'string') {
-            const mimetypeMatch = contentData.match(/mimetype=([^|]+)/);
-            if (mimetypeMatch) {
-              contentType = mimetypeMatch[1];
-            }
-          }
-        }
+  async getDownloadUrl(nodeRef: string): Promise<string> {
+    console.log(`[ContentService] Getting download URL for nodeRef: ${nodeRef}`);
+    
+    const readResult = await this.read(nodeRef);
+    
+    // Extract download URL from SOAP response
+    let downloadUrl: string | null = null;
+    
+    if (readResult.content && Array.isArray(readResult.content)) {
+      const content = readResult.content[0];
+      if (content && content.url) {
+        downloadUrl = content.url;
       }
-
-      console.log(`[ContentService] Metadata extracted: ${filename}, ${contentType}`);
-
-      // Step 2: Use ContentService.read SOAP operation to get download URL
-      console.log(`[ContentService] Calling ContentService.read SOAP operation for nodeRef: ${nodeRef}`);
-      const readResult = await this.read(nodeRef);
-      
-      console.log(`[ContentService] ContentService.read result received`);
-
-      // Step 3: Extract download URL from SOAP response
-      let downloadUrl: string | null = null;
-      
-      // Look for content URL in various possible response shapes
-      if (readResult.content && Array.isArray(readResult.content)) {
-        const content = readResult.content[0];
-        if (content && content.url) {
-          downloadUrl = content.url;
-        }
-      } else if (readResult.content && readResult.content.url) {
-        downloadUrl = readResult.content.url;
-      } else if (readResult.readResponse && readResult.readResponse.content) {
-        const content = Array.isArray(readResult.readResponse.content) 
-          ? readResult.readResponse.content[0] 
-          : readResult.readResponse.content;
-        if (content && content.url) {
-          downloadUrl = content.url;
-        }
+    } else if (readResult.content && readResult.content.url) {
+      downloadUrl = readResult.content.url;
+    } else if (readResult.readResponse && readResult.readResponse.content) {
+      const content = Array.isArray(readResult.readResponse.content) 
+        ? readResult.readResponse.content[0] 
+        : readResult.readResponse.content;
+      if (content && content.url) {
+        downloadUrl = content.url;
       }
-
-      if (!downloadUrl) {
-        throw new Error('No download URL found in ContentService.read response');
-      }
-
-      console.log(`[ContentService] Download URL received: ${downloadUrl}`);
-
-      // Step 4: Use the URL exactly as returned by SOAP - it should already be properly authenticated
-      console.log(`[ContentService] Using download URL exactly as returned by SOAP...`);
-
-      const response = await fetch(downloadUrl, {
-        method: 'GET',
-        headers: {
-          'User-Agent': 'Alfresco-SOAP-API-Client',
-          'Accept': '*/*'
-        }
-      });
-
-      console.log(`[ContentService] Download response: HTTP ${response.status} ${response.statusText}`);
-      const responseContentType = response.headers.get('content-type') || '';
-      const contentLength = response.headers.get('content-length') || 'unknown';
-      console.log(`[ContentService] Response content-type: ${responseContentType}`);
-      console.log(`[ContentService] Response content-length: ${contentLength}`);
-
-      if (!response.ok) {
-        throw new Error(`Download failed: HTTP ${response.status} ${response.statusText}`);
-      }
-
-            // If we got HTML instead of the expected file content, the URL needs authentication
-      if (responseContentType.includes('text/html')) {
-        console.log(`[ContentService] Got HTML login page instead of file content`);
-        console.log(`[ContentService] Expected content-type: ${contentType}, got: ${responseContentType}`);
-        console.log(`[ContentService] The SOAP URL requires additional authentication`);
-        
-        // Try adding ticket authentication to the SOAP-provided URL
-        const authenticatedUrl = downloadUrl.includes('?')
-          ? `${downloadUrl}&alf_ticket=${encodeURIComponent(ticket)}`
-          : `${downloadUrl}?alf_ticket=${encodeURIComponent(ticket)}`;
-        
-        console.log(`[ContentService] Retrying with ticket authentication...`);
-        
-        const authResponse = await fetch(authenticatedUrl, {
-          method: 'GET',
-          headers: {
-            'User-Agent': 'Alfresco-SOAP-API-Client',
-            'Accept': '*/*'
-          }
-        });
-        
-        console.log(`[ContentService] Auth retry response: HTTP ${authResponse.status} ${authResponse.statusText}`);
-        const authContentType = authResponse.headers.get('content-type') || '';
-        console.log(`[ContentService] Auth retry content-type: ${authContentType}`);
-        
-        if (authResponse.ok && !authContentType.includes('text/html')) {
-          const arrayBuffer = await authResponse.arrayBuffer();
-          const fileContent = Buffer.from(arrayBuffer);
-          console.log(`[ContentService] Successfully downloaded ${fileContent.length} bytes with ticket auth`);
-          
-          return {
-            buffer: fileContent,
-            filename,
-            contentType,
-            size: fileContent.length
-          };
-        }
-        
-        throw new Error(`URL authentication failed. SOAP URL: ${downloadUrl}, Expected: ${contentType}, Got: ${authContentType}`);
-      }
-
-      const arrayBuffer = await response.arrayBuffer();
-      const fileContent = Buffer.from(arrayBuffer);
-      
-      console.log(`[ContentService] Successfully downloaded ${fileContent.length} bytes`);
-
-      return {
-        buffer: fileContent,
-        filename,
-        contentType,
-        size: fileContent.length
-      };
-
-    } catch (error) {
-      console.error('[ContentService] Hybrid SOAP+HTTP content retrieval failed:', error);
-      throw new Error(`Content retrieval failed for ${nodeRef}: ${(error as Error).message}`);
     }
+
+    if (!downloadUrl) {
+      throw new Error('No download URL found in ContentService.read response');
+    }
+
+    console.log(`[ContentService] Download URL extracted: ${downloadUrl}`);
+    return downloadUrl;
   }
 
   /**

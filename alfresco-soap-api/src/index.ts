@@ -1,6 +1,6 @@
 import { AuthenticationService } from './services/AuthenticationService';
 import { RepositoryService } from './services/RepositoryService';
-import { ContentService, ContentData } from './services/ContentService';
+import { ContentService } from './services/ContentService';
 import { NodeRef } from './models/NodeRef';
 import { StoreRef } from './models/StoreRef';
 
@@ -201,25 +201,20 @@ function extractNodesFromQueryResponse(result: any): any[] {
 }
 
 /**
- * Get file content using the robust SOAP + HTTP approach
- * Step 1: Use SOAP ContentService.read to get Content object with download URL
- * Step 2: Download content via the URL provided by Alfresco
- * This method is consistent with RepositoryService and uses exact WSDL operations
+ * Get download URL for content using SOAP ContentService.read
+ * Returns the direct download URL that can be used for redirects or direct access
  */
-export async function getFileContent(client: AlfrescoClient, nodeRef: NodeRef): Promise<ContentData> {
+export async function getDownloadUrl(client: AlfrescoClient, nodeRef: NodeRef): Promise<string> {
   await client.authenticate();
   
-  if (!client.ticket) {
-    throw new Error('Authentication required: No ticket available');
-  }
-  
   try {
-    console.log(`[alfresco-soap-api] Getting file content for nodeRef: ${nodeRef}`);
-    const contentData = await client.contentService.getFileContent(nodeRef, client.repoService, client.ticket);
-    return contentData;
-  } catch (contentError) {
-    console.error(`[alfresco-soap-api] ContentService.getFileContent failed for ${nodeRef}:`, contentError);
-    throw new Error(`Failed to get content for nodeRef ${nodeRef}: ${(contentError as Error).message}`);
+    console.log(`[alfresco-soap-api] Getting download URL for nodeRef: ${nodeRef}`);
+    const downloadUrl = await client.contentService.getDownloadUrl(nodeRef);
+    console.log(`[alfresco-soap-api] Successfully got download URL for ${nodeRef}`);
+    return downloadUrl;
+  } catch (error) {
+    console.error(`[alfresco-soap-api] Failed to get download URL for ${nodeRef}:`, error);
+    throw new Error(`Failed to get download URL for nodeRef ${nodeRef}: ${(error as Error).message}`);
   }
 }
 
@@ -233,5 +228,4 @@ async function nodeRefToPath(client: AlfrescoClient, nodeRef: NodeRef): Promise<
 }
 
 // Export types
-export type { ContentData };
 export type { NodeRef, StoreRef }; 
