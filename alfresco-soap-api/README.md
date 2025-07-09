@@ -7,13 +7,13 @@ A TypeScript library for connecting to Alfresco Content Services via the SOAP AP
 ## Features
 - **Authenticate with Alfresco SOAP API**
 - **Query nodes, fetch children, and navigate the repository**
-- **Download and retrieve file content** using WSDL-compliant SOAP operations with automatic authentication
+- **Download and retrieve file content** using Alfresco's hybrid SOAP+HTTP approach with proper authentication
 - **TypeScript types** for StoreRef, NodeRef, ContentData, and more
 - **No hardcoded nodeRefs or credentials**—fully configurable
 - **Consistent, normalized return values** for all methods (always arrays/objects, never SOAP-wrapped responses)
 - **Navigate the full Alfresco folder structure**: `getChildren` works for any nodeRef, not just Company Home
 - **WSDL-compliant SOAP methods**: Uses Alfresco's official SOAP operations exactly as specified in the WSDL
-- **Robust content retrieval**: Uses SOAP ContentService.read to get download URLs, then fetches content with multiple authentication methods
+- **Hybrid content retrieval**: Uses SOAP ContentService.read to get download URLs, then fetches content via Alfresco's download servlet with SOAP session authentication
 - **Automatic nodeRef normalization**: All nodeRefs are parsed and passed to the Alfresco SOAP API in the correct `{ scheme, address, uuid }` format
 - **Consistent architecture**: ContentService follows the same patterns as RepositoryService for maintainability
 
@@ -122,39 +122,32 @@ interface AlfrescoClientConfig {
 
 ## How Content Retrieval Works
 
-The `getFileContent` function uses a **robust two-step approach**:
+The `getFileContent` function uses **Alfresco's by-design hybrid SOAP+HTTP approach**:
 
 ### Step 1: SOAP ContentService.read
 ```ts
-// Uses exact WSDL operation to get Content object
+// Uses exact WSDL operation to get Content object with download URL
 const result = await contentService.read(nodeRef, property);
-// Extract download URL from Content object
+// Extract download URL from Content object (e.g., "/alfresco/d/a/workspace/SpacesStore/uuid/filename")
 const downloadUrl = result.content[0].url;
 ```
 
 ### Step 2: Authenticated HTTP Download
 ```ts
-// Download content via Alfresco's own URL with authentication
-// Try multiple authentication methods for maximum compatibility
-const authMethods = [
-  // Method 1: Add alf_ticket parameter to URL
-  { url: `${downloadUrl}?alf_ticket=${ticket}` },
-  // Method 2: Use ticket in Authorization header  
-  { url: downloadUrl, headers: { 'Authorization': `Basic ${ticket}` } },
-  // Method 3: Original URL (fallback)
-  { url: downloadUrl }
-];
+// Convert to absolute URL and add SOAP session authentication
+const fullUrl = `${baseUrl}${downloadUrl}?alf_ticket=${soapTicket}`;
 
-const response = await fetch(authenticatedUrl);
+// Download content via Alfresco's download servlet
+const response = await fetch(fullUrl);
 const fileContent = Buffer.from(await response.arrayBuffer());
 ```
 
 ### Why This Approach Works
-1. **Uses exact WSDL operations** - no guessing or workarounds
-2. **Alfresco provides the download URL** - official content delivery mechanism
-3. **Multiple authentication methods** - works with different Alfresco configurations
-4. **Consistent with RepositoryService** - same patterns and architecture
-5. **Reliable across versions** - uses official Alfresco mechanisms with proper authentication
+1. **Uses exact WSDL operations** - follows Alfresco's official ContentService specification
+2. **Alfresco's intended design** - ContentService.read returns URLs, not embedded content
+3. **Proper SOAP session authentication** - uses the same ticket from SOAP authentication
+4. **Download servlet integration** - uses Alfresco's `/d/a/` and `/d/d/` download paths
+5. **Reliable across versions** - follows Alfresco's documented hybrid architecture
 
 ## Content Service Operations
 
@@ -162,10 +155,10 @@ The ContentService provides these WSDL-compliant operations:
 
 ### Reading Content
 ```ts
-// Get Content object with download URL
+// Get Content object with download URL (via SOAP)
 const contentInfo = await client.contentService.read(nodeRef, property);
 
-// High-level file download
+// High-level file download (hybrid SOAP+HTTP)
 const fileData = await getFileContent(client, nodeRef);
 ```
 
@@ -285,13 +278,13 @@ All SOAP calls use the exact parameter structure specified in the WSDL:
 3. Ensure the node is a file (cm:content) not a folder
 
 #### "Download URL returned login page"
-**Cause**: The download URL requires authentication that failed
-**Fixed**: The library now automatically tries multiple authentication methods (URL parameter, Authorization header, fallback)
+**Cause**: The download URL authentication failed using SOAP session ticket
+**Fixed**: The library now uses the correct hybrid SOAP+HTTP approach with proper session authentication
 **If still failing**:
 1. Verify the SOAP ticket is valid: `await client.authenticate()`
 2. Check user permissions for the specific content
 3. Ensure the nodeRef exists and has content
-4. Check if your Alfresco instance requires specific authentication headers
+4. Verify your Alfresco server URL configuration matches the returned download URLs
 
 #### "Body has already been read" / "Body is unusable"
 **Cause**: HTTP response body consumption conflict in authentication retry logic
@@ -350,16 +343,16 @@ Both RepositoryService and ContentService follow the same patterns:
 ### Why This Architecture Works
 1. **Predictable behavior** across all Alfresco versions
 2. **Easy to maintain** - follows official specifications
-3. **Reliable** - uses Alfresco's intended mechanisms with robust authentication
-4. **Compatible** - handles different Alfresco authentication configurations automatically
+3. **Reliable** - uses Alfresco's intended hybrid SOAP+HTTP architecture
+4. **Authentic** - uses the same authentication mechanisms as Alfresco's web interface
 5. **Extensible** - easy to add new WSDL-compliant operations
 
 ## Notes
 - This package is **Node.js only**. Do not import it in browser code.
 - Use in Next.js API routes, Express, or any Node.js backend.
 - All methods return normalized, developer-friendly data structures.
-- Content retrieval uses Alfresco's own download URLs with automatic authentication handling.
-- **Robust authentication**: Multiple authentication methods ensure compatibility across different Alfresco configurations.
+- Content retrieval uses **Alfresco's hybrid SOAP+HTTP approach**: SOAP for URLs, HTTP for downloads.
+- **Proper authentication**: Uses SOAP session tickets for download servlet authentication.
 - All SOAP operations strictly follow the official Alfresco WSDL specifications.
 
 ## License

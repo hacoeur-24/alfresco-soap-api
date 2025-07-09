@@ -209,9 +209,13 @@ function extractNodesFromQueryResponse(result: any): any[] {
 export async function getFileContent(client: AlfrescoClient, nodeRef: NodeRef): Promise<ContentData> {
   await client.authenticate();
   
+  if (!client.ticket) {
+    throw new Error('Authentication required: No ticket available');
+  }
+  
   try {
     console.log(`[alfresco-soap-api] Getting file content for nodeRef: ${nodeRef}`);
-    const contentData = await client.contentService.getFileContent(nodeRef, client.repoService);
+    const contentData = await client.contentService.getFileContent(nodeRef, client.repoService, client.ticket, client.config.url);
     return contentData;
   } catch (contentError) {
     console.error(`[alfresco-soap-api] ContentService.getFileContent failed for ${nodeRef}:`, contentError);
