@@ -108,13 +108,13 @@ const MainContent: React.FC<MainContentProps> = ({ node, children }) => {
   const folders = children.filter(child => !isFile(child));
 
   const handleOpenFile = (fileNode: any) => {
-    // Open file in a new tab/window using the content URL
+    // Open file in a new tab/window using the SOAP + HTTP approach
     const contentUrl = `/api/content?nodeRef=${encodeURIComponent(fileNode.nodeRef)}`;
     window.open(contentUrl, '_blank');
   };
 
   const handleDownloadFile = (fileNode: any) => {
-    // Download file using the content URL with download parameter
+    // Download file using the SOAP + HTTP approach
     const downloadUrl = `/api/content?nodeRef=${encodeURIComponent(fileNode.nodeRef)}&download=true`;
     
     // Create a temporary link element and trigger download
