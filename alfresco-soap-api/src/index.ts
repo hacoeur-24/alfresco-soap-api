@@ -1,6 +1,6 @@
 import { AuthenticationService } from './services/AuthenticationService';
 import { RepositoryService } from './services/RepositoryService';
-import { ContentService } from './services/ContentService';
+import { ContentService, ContentData, ContentInfo } from './services/ContentService';
 import { NodeRef } from './models/NodeRef';
 import { StoreRef } from './models/StoreRef';
 
@@ -200,15 +200,15 @@ function extractNodesFromQueryResponse(result: any): any[] {
     .filter((node: any) => node.nodeRef !== 'unknown'); // Filter out nodes we couldn't parse
 }
 
-export async function getFileContent(client: AlfrescoClient, nodeRef: NodeRef): Promise<any> {
+export async function getFileContent(client: AlfrescoClient, nodeRef: NodeRef): Promise<ContentData> {
   await client.authenticate();
   
   try {
     console.log(`[alfresco-soap-api] Getting file content for nodeRef: ${nodeRef}`);
-    const content = await client.contentService.read(nodeRef);
-    return content;
+    const contentData = await client.contentService.getFileContent(nodeRef, client.repoService);
+    return contentData;
   } catch (contentError) {
-    console.error(`[alfresco-soap-api] ContentService.read failed for ${nodeRef}:`, contentError);
+    console.error(`[alfresco-soap-api] ContentService.getFileContent failed for ${nodeRef}:`, contentError);
     throw new Error(`Failed to get content for nodeRef ${nodeRef}: ${(contentError as Error).message}`);
   }
 }
@@ -222,4 +222,4 @@ async function nodeRefToPath(client: AlfrescoClient, nodeRef: NodeRef): Promise<
   return '/app:company_home';
 }
 
-export type { NodeRef, StoreRef }; 
+export type { NodeRef, StoreRef, ContentData, ContentInfo }; 
