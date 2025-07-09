@@ -1,6 +1,6 @@
 import { AuthenticationService } from './services/AuthenticationService';
 import { RepositoryService } from './services/RepositoryService';
-import { ContentService, ContentData, ContentInfo, ContentMetadata, IntegrityReport, IntegrityCheck } from './services/ContentService';
+import { ContentService, ContentData } from './services/ContentService';
 import { NodeRef } from './models/NodeRef';
 import { StoreRef } from './models/StoreRef';
 
@@ -200,6 +200,12 @@ function extractNodesFromQueryResponse(result: any): any[] {
     .filter((node: any) => node.nodeRef !== 'unknown'); // Filter out nodes we couldn't parse
 }
 
+/**
+ * Get file content using the robust SOAP + HTTP approach
+ * Step 1: Use SOAP ContentService.read to get Content object with download URL
+ * Step 2: Download content via the URL provided by Alfresco
+ * This method is consistent with RepositoryService and uses exact WSDL operations
+ */
 export async function getFileContent(client: AlfrescoClient, nodeRef: NodeRef): Promise<ContentData> {
   await client.authenticate();
   
@@ -213,33 +219,6 @@ export async function getFileContent(client: AlfrescoClient, nodeRef: NodeRef): 
   }
 }
 
-/**
- * Alternative file content retrieval using hybrid SOAP+HTTP approach
- * This method uses SOAP for authentication and metadata, but HTTP for binary content download
- * Often more reliable with older Alfresco versions or when SOAP content streaming is disabled
- */
-export async function getFileContentHybrid(client: AlfrescoClient, nodeRef: NodeRef): Promise<ContentData> {
-  await client.authenticate();
-  
-  if (!client.ticket) {
-    throw new Error('Authentication required: No ticket available');
-  }
-  
-  try {
-    console.log(`[alfresco-soap-api] Getting file content via hybrid method for nodeRef: ${nodeRef}`);
-    const contentData = await client.contentService.getFileContentHybrid(
-      nodeRef, 
-      client.repoService, 
-      client.ticket, 
-      client.config.url
-    );
-    return contentData;
-  } catch (contentError) {
-    console.error(`[alfresco-soap-api] Hybrid content retrieval failed for ${nodeRef}:`, contentError);
-    throw new Error(`Failed to get content via hybrid method for nodeRef ${nodeRef}: ${(contentError as Error).message}`);
-  }
-}
-
 // Helper: convert nodeRef to path (for now, only supports company_home)
 async function nodeRefToPath(client: AlfrescoClient, nodeRef: NodeRef): Promise<string> {
   // If nodeRef is company home, return /app:company_home
@@ -249,55 +228,6 @@ async function nodeRefToPath(client: AlfrescoClient, nodeRef: NodeRef): Promise<
   return '/app:company_home';
 }
 
-// Export types for migration tools
-export type { ContentData, ContentInfo, ContentMetadata, IntegrityReport, IntegrityCheck };
-export type { NodeRef, StoreRef };
-
-/**
- * Migration-grade file content retrieval with comprehensive integrity verification
- * Recommended for migration tools where file integrity is critical
- * 
- * Features:
- * - Size verification against Alfresco metadata
- * - MD5 and SHA256 checksum generation
- * - Comprehensive error reporting
- * - Multiple download method fallbacks
- * - Detailed integrity report
- */
-export async function getFileContentForMigration(
-  client: AlfrescoClient, 
-  nodeRef: NodeRef
-): Promise<ContentData & { integrity: IntegrityReport }> {
-  await client.authenticate();
-  
-  if (!client.ticket) {
-    throw new Error('Authentication required: No ticket available for migration');
-  }
-  
-  try {
-    console.log(`[alfresco-soap-api] Starting migration-grade content retrieval for nodeRef: ${nodeRef}`);
-    const contentData = await client.contentService.getFileContentWithIntegrityCheck(
-      nodeRef, 
-      client.repoService, 
-      client.ticket, 
-      client.config.url
-    );
-    
-    // Log integrity results for migration audit trail
-    console.log(`[alfresco-soap-api] Migration integrity check completed:`, {
-      nodeRef,
-      filename: contentData.filename,
-      isValid: contentData.integrity.isValid,
-      downloadedSize: contentData.integrity.downloadedSize,
-      expectedSize: contentData.integrity.expectedSize,
-      checksums: contentData.integrity.checksums,
-      errors: contentData.integrity.errors,
-      warnings: contentData.integrity.warnings
-    });
-    
-    return contentData;
-  } catch (contentError) {
-    console.error(`[alfresco-soap-api] Migration content retrieval failed for ${nodeRef}:`, contentError);
-    throw new Error(`Failed to get content for migration ${nodeRef}: ${(contentError as Error).message}`);
-  }
-} 
+// Export types
+export type { ContentData };
+export type { NodeRef, StoreRef }; 
