@@ -52,9 +52,9 @@ export class ContentService extends SoapService {
   /**
    * Get file content using Alfresco's hybrid SOAP+HTTP approach
    * Step 1: Use SOAP ContentService.read to get download URL
-   * Step 2: Fetch content from URL with proper SOAP session authentication
+   * Step 2: Use the URL exactly as provided by SOAP (robust approach)
    */
-  async getFileContent(nodeRef: string, repositoryService: any, ticket: string, baseUrl: string): Promise<ContentData> {
+  async getFileContent(nodeRef: string, repositoryService: any, ticket: string): Promise<ContentData> {
     try {
       console.log(`[ContentService] Starting hybrid SOAP+HTTP content retrieval for nodeRef: ${nodeRef}`);
 
@@ -122,25 +122,10 @@ export class ContentService extends SoapService {
 
       console.log(`[ContentService] Download URL received: ${downloadUrl}`);
 
-      // Step 4: Convert relative URL to absolute if needed
-      let fullDownloadUrl = downloadUrl;
-      if (downloadUrl.startsWith('/')) {
-        // Remove /alfresco from baseUrl if present and add the relative path
-        const cleanBaseUrl = baseUrl.replace(/\/alfresco\/?$/, '');
-        fullDownloadUrl = `${cleanBaseUrl}${downloadUrl}`;
-      }
+      // Step 4: Use the URL exactly as returned by SOAP - it should already be properly authenticated
+      console.log(`[ContentService] Using download URL exactly as returned by SOAP...`);
 
-      console.log(`[ContentService] Full download URL: ${fullDownloadUrl}`);
-
-      // Step 5: Download content with SOAP session authentication
-      // Use alf_ticket parameter which should work with the same session as SOAP
-      const authenticatedUrl = fullDownloadUrl.includes('?')
-        ? `${fullDownloadUrl}&alf_ticket=${encodeURIComponent(ticket)}`
-        : `${fullDownloadUrl}?alf_ticket=${encodeURIComponent(ticket)}`;
-
-      console.log(`[ContentService] Downloading content with ticket authentication...`);
-
-      const response = await fetch(authenticatedUrl, {
+      const response = await fetch(downloadUrl, {
         method: 'GET',
         headers: {
           'User-Agent': 'Alfresco-SOAP-API-Client',
@@ -158,9 +143,46 @@ export class ContentService extends SoapService {
         throw new Error(`Download failed: HTTP ${response.status} ${response.statusText}`);
       }
 
-      // Since the download URL works when accessed directly, we'll skip strict HTML detection
-      // and proceed with the download. The authentication is working correctly.
-      console.log(`[ContentService] Proceeding with content download (content-type: ${responseContentType})`);
+            // If we got HTML instead of the expected file content, the URL needs authentication
+      if (responseContentType.includes('text/html')) {
+        console.log(`[ContentService] Got HTML login page instead of file content`);
+        console.log(`[ContentService] Expected content-type: ${contentType}, got: ${responseContentType}`);
+        console.log(`[ContentService] The SOAP URL requires additional authentication`);
+        
+        // Try adding ticket authentication to the SOAP-provided URL
+        const authenticatedUrl = downloadUrl.includes('?')
+          ? `${downloadUrl}&alf_ticket=${encodeURIComponent(ticket)}`
+          : `${downloadUrl}?alf_ticket=${encodeURIComponent(ticket)}`;
+        
+        console.log(`[ContentService] Retrying with ticket authentication...`);
+        
+        const authResponse = await fetch(authenticatedUrl, {
+          method: 'GET',
+          headers: {
+            'User-Agent': 'Alfresco-SOAP-API-Client',
+            'Accept': '*/*'
+          }
+        });
+        
+        console.log(`[ContentService] Auth retry response: HTTP ${authResponse.status} ${authResponse.statusText}`);
+        const authContentType = authResponse.headers.get('content-type') || '';
+        console.log(`[ContentService] Auth retry content-type: ${authContentType}`);
+        
+        if (authResponse.ok && !authContentType.includes('text/html')) {
+          const arrayBuffer = await authResponse.arrayBuffer();
+          const fileContent = Buffer.from(arrayBuffer);
+          console.log(`[ContentService] Successfully downloaded ${fileContent.length} bytes with ticket auth`);
+          
+          return {
+            buffer: fileContent,
+            filename,
+            contentType,
+            size: fileContent.length
+          };
+        }
+        
+        throw new Error(`URL authentication failed. SOAP URL: ${downloadUrl}, Expected: ${contentType}, Got: ${authContentType}`);
+      }
 
       const arrayBuffer = await response.arrayBuffer();
       const fileContent = Buffer.from(arrayBuffer);
