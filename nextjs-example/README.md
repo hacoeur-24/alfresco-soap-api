@@ -3,10 +3,12 @@
 This example demonstrates how to use the `alfresco-soap-api` Node.js library in a Next.js app to browse Alfresco Content Services via SOAP.
 
 ## Features
+- **Unified API Endpoint**: Single `/api/alfresco` route handles all operations via action parameter
 - Configure your Alfresco server connection (scheme/address) via environment variables
 - The UI shows the top-level folders (e.g., Sites, User Homes, Data Dictionary) from Company Home as navigation buttons in the header
 - Clicking a header button shows its subfolders/files in the sidebar, allowing you to browse deeper
 - All backend API calls use the npm library and return normalized data
+- File viewing and downloading capabilities
 
 ## Setup
 
@@ -49,9 +51,20 @@ Sidebar: Shows folders/files inside the selected root (e.g., Sites)
 Main area: Shows details for the selected node
 ```
 
+## API Structure
+
+The example uses a unified API endpoint at `/api/alfresco` with action-based routing:
+
+- **Get Company Home**: `GET /api/alfresco?action=company-home`
+- **Get Children**: `GET /api/alfresco?action=children&nodeRef=<nodeRef>`
+- **View/Download Content**: `GET /api/alfresco?action=content&nodeRef=<nodeRef>&download=true`
+- **Get Stores**: `GET /api/alfresco?action=stores`
+
+This approach simplifies API management by consolidating all Alfresco operations into a single endpoint while maintaining clean action-based functionality.
+
 ## Customization
 - To change the default store, update `ALFRESCO_SCHEME` and `ALFRESCO_ADDRESS` in your environment variables.
 - The backend only uses the configured store and does not show other stores in the UI.
 
 ## Library Reference
-See the [alfresco-soap-api README](./node_modules/alfresco-soap-api/README.md) for full API documentation. 
+See the [alfresco-soap-api README](../alfresco-soap-api/README.md) for full API documentation. 
