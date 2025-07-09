@@ -1,35 +1,21 @@
 {
   "name": "alfresco-soap-api",
-  "version": "1.3.0",
-  "description": "Alfresco SOAP API client for Node.js (for use in Next.js API routes, Express, etc.)",
+  "version": "2.0.0",
+  "description": "A modern TypeScript client for Alfresco SOAP API with simplified convenience methods and service proxies",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "exports": {
-    ".": {
-      "import": "./dist/index.js",
-      "require": "./dist/index.js"
-    }
+  "scripts": {
+    "build": "tsc",
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
+  "keywords": ["alfresco", "soap", "api", "cms", "typescript", "client"],
+  "author": "",
+  "license": "ISC",
   "dependencies": {
-    "soap": "^1.1.12",
-    "xmlbuilder2": "^3.1.1"
+    "soap": "^1.1.4"
   },
   "devDependencies": {
-    "@types/node": "^20.19.4",
-    "@types/soap": "^0.18.0",
-    "ts-node": "^10.9.2",
-    "typescript": "^5.8.3"
-  },
-  "scripts": {
-    "build": "tsc"
-  },
-  "keywords": [
-    "alfresco",
-    "soap",
-    "api",
-    "nodejs",
-    "nextjs"
-  ],
-  "author": "",
-  "license": "MIT"
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
+  }
 }

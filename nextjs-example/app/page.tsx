@@ -27,10 +27,10 @@ export default function HomePage() {
     setError(null);
     setSidebarLoading(true);
     try {
-      const res = await fetch('/api/company-home');
+      const res = await fetch('/api/alfresco?action=company-home');
       if (!res.ok) throw new Error('Failed to fetch Company Home');
       const companyHome = await res.json();
-      const childrenRes = await fetch(`/api/children?nodeRef=${encodeURIComponent(companyHome.nodeRef)}`);
+      const childrenRes = await fetch(`/api/alfresco?action=children&nodeRef=${encodeURIComponent(companyHome.nodeRef)}`);
       if (!childrenRes.ok) throw new Error('Failed to fetch Company Home children');
       const children = await childrenRes.json();
       setCompanyHomeChildren(children);
@@ -53,7 +53,7 @@ export default function HomePage() {
     }
     setSidebarLoading(true);
     setSidebarError(null);
-    fetch(`/api/children?nodeRef=${encodeURIComponent(selectedRoot.nodeRef)}`)
+    fetch(`/api/alfresco?action=children&nodeRef=${encodeURIComponent(selectedRoot.nodeRef)}`)
       .then(res => {
         if (!res.ok) throw new Error('Failed to load children');
         return res.json();
@@ -80,7 +80,7 @@ export default function HomePage() {
     }
     setSidebarLoading(true);
     setSidebarError(null);
-    fetch(`/api/children?nodeRef=${encodeURIComponent(node.nodeRef)}`)
+    fetch(`/api/alfresco?action=children&nodeRef=${encodeURIComponent(node.nodeRef)}`)
       .then(res => {
         if (!res.ok) throw new Error('Failed to load children');
         return res.json();
@@ -118,7 +118,7 @@ export default function HomePage() {
       }
       setSidebarLoading(true);
       setSidebarError(null);
-      fetch(`/api/children?nodeRef=${encodeURIComponent(prevNode.nodeRef)}`)
+      fetch(`/api/alfresco?action=children&nodeRef=${encodeURIComponent(prevNode.nodeRef)}`)
         .then(res => {
           if (!res.ok) throw new Error('Failed to load children');
           return res.json();

@@ -1,56 +1,303 @@
-# alfresco-soap-api
+# Alfresco SOAP API Client
 
-[![GitHub](https://img.shields.io/badge/GitHub-Repository-blue?logo=github)](https://github.com/hacoeur-24/alfresco-soap-api)
-
-A TypeScript library for connecting to Alfresco Content Services via the SOAP API. **Node.js only**—use in Next.js API routes, Express, serverless, etc.
+A modern TypeScript client for Alfresco SOAP API with simplified convenience methods and service proxies. Create powerful Alfresco integrations with minimal setup.
 
 ## Features
-- **Authenticate with Alfresco SOAP API**
-- **Query nodes, fetch children, and navigate the repository**
-- **Download and retrieve file content** using Alfresco's hybrid SOAP+HTTP approach with proper authentication
-- **TypeScript types** for StoreRef, NodeRef, ContentData, and more
-- **No hardcoded nodeRefs or credentials**—fully configurable
-- **Consistent, normalized return values** for all methods (always arrays/objects, never SOAP-wrapped responses)
-- **Navigate the full Alfresco folder structure**: `getChildren` works for any nodeRef, not just Company Home
-- **WSDL-compliant SOAP methods**: Uses Alfresco's official SOAP operations exactly as specified in the WSDL
-- **Hybrid content retrieval**: Uses SOAP ContentService.read to get download URLs, then fetches content via Alfresco's download servlet with SOAP session authentication
-- **Automatic nodeRef normalization**: All nodeRefs are parsed and passed to the Alfresco SOAP API in the correct `{ scheme, address, uuid }` format
-- **Consistent architecture**: ContentService follows the same patterns as RepositoryService for maintainability
+
+- **🚀 Simple API**: Direct methods on `AlfrescoClient` for all common operations
+- **🔧 Service Proxies**: Easy access via `client.repository`, `client.content`, `client.auth`
+- **⚙️ Smart Defaults**: Optional configuration with sensible defaults
+- **🎯 Unified Endpoints**: Create single API endpoints handling multiple operations
+- **📝 TypeScript**: Full type safety and IntelliSense support
+- **🔐 Automatic Auth**: All methods handle authentication automatically
 
 ## Installation
 
-```sh
+```bash
 npm install alfresco-soap-api
 ```
 
-## Usage Examples
+## Quick Start
 
-### Basic Repository Navigation (Next.js API Route)
+```typescript
+import { AlfrescoClient } from 'alfresco-soap-api';
 
-```ts
-// app/api/company-home/route.ts
+// Create client with minimal configuration
+const client = new AlfrescoClient({
+  url: 'http://your-alfresco-server:8080',
+  username: 'admin',
+  password: 'admin'
+  // scheme and address are optional (defaults: 'workspace', 'SpacesStore')
+});
+
+// Use convenience methods directly
+const companyHome = await client.getCompanyHome();
+const children = await client.getChildren(companyHome.nodeRef);
+const downloadUrl = await client.getDownloadUrl(someNodeRef);
+
+// Search for content
+const results = await client.search('TYPE:"cm:content"');
+
+// Access service methods via proxies
+const stores = await client.repository.getStores();
+const nodeData = await client.content.read(nodeRef);
+```
+
+## API Reference
+
+### Convenience Methods
+
+All methods automatically handle authentication:
+
+```typescript
+// Document management
+await client.getCompanyHome()                    // Get company home node
+await client.getChildren(nodeRef)                // Get child nodes
+await client.getParents(nodeRef)                 // Get parent nodes
+await client.getNode(nodeRef)                    // Get node details
+
+// Content operations
+await client.getDownloadUrl(nodeRef)             // Get content download URL
+await client.readContent(nodeRef)                // Read content data
+await client.writeContent(nodeRef, content)      // Write content
+await client.clearContent(nodeRef)               // Clear content
+
+// Search and query
+await client.search('TYPE:"cm:content"')         // Lucene search
+await client.query({language: 'lucene', statement: '...'}) // Custom query
+await client.getStores()                         // Get available stores
+```
+
+### Service Proxies
+
+Access underlying services without creating instances:
+
+```typescript
+// Repository service proxy
+await client.repository.getStores()
+await client.repository.query(store, query, includeMetaData)
+await client.repository.get(nodeRef)
+await client.repository.queryChildren(nodeRef)
+await client.repository.queryParents(nodeRef)
+
+// Content service proxy  
+await client.content.read(nodeRef, property)
+await client.content.write(nodeRef, content, property, format)
+await client.content.getDownloadUrl(nodeRef)
+await client.content.clear(nodeRef, property)
+await client.content.transform(sourceRef, prop, targetRef, targetProp, format)
+
+// Authentication service proxy
+await client.auth.login(username, password)
+await client.auth.logout(ticket)
+```
+
+## Usage Patterns
+
+### Single API File with Exported Handlers
+
+Create one API file with all Alfresco operations:
+
+```typescript
+// app/api/alfresco/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { AlfrescoClient, getCompanyHome } from 'alfresco-soap-api';
+import { AlfrescoClient } from 'alfresco-soap-api';
 
-export async function GET() {
+/**
+ * Create and return an authenticated Alfresco client
+ */
+export async function getAlfrescoClient(): Promise<AlfrescoClient> {
+  try {
+    const client = new AlfrescoClient({
+      url: process.env.ALFRESCO_URL!,
+      username: process.env.ALFRESCO_USERNAME!,
+      password: process.env.ALFRESCO_PASSWORD!,
+      scheme: process.env.ALFRESCO_SCHEME,
+      address: process.env.ALFRESCO_ADDRESS,
+    });
+    return client;
+  } catch (error) {
+    throw new Error(`Failed to create Alfresco client: ${(error as Error).message}`);
+  }
+}
+
+/**
+ * Get Company Home
+ */
+export async function handleGetCompanyHome(): Promise<NextResponse> {
+  try {
+    const client = await getAlfrescoClient();
+    const companyHome = await client.getCompanyHome();
+    return NextResponse.json(companyHome);
+  } catch (error) {
+    console.error('Failed to get Company Home:', error);
+    return NextResponse.json(
+      { error: 'Company Home not found: ' + (error as Error).message },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * Get children of a node
+ */
+export async function handleGetChildren(nodeRef: string): Promise<NextResponse> {
+  try {
+    const client = await getAlfrescoClient();
+    const children = await client.getChildren(nodeRef);
+    return NextResponse.json(children);
+  } catch (error) {
+    console.error('Failed to get children:', error);
+    return NextResponse.json(
+      { error: 'Failed to load children: ' + (error as Error).message },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * Redirect to content download
+ */
+export async function handleContentRedirect(nodeRef: string, download: boolean = false): Promise<NextResponse> {
+  try {
+    const client = await getAlfrescoClient();
+    let alfrescoUrl = await client.getDownloadUrl(nodeRef);
+    
+    // Convert to download URL if needed
+    if (download && alfrescoUrl.includes('/d/d/')) {
+      alfrescoUrl = alfrescoUrl.replace('/d/d/', '/d/a/');
+    }
+
+    // Add ticket auth
+    const authenticatedUrl = alfrescoUrl.includes('?') 
+      ? `${alfrescoUrl}&alf_ticket=${encodeURIComponent(client.ticket!)}`
+      : `${alfrescoUrl}?alf_ticket=${encodeURIComponent(client.ticket!)}`;
+
+    return NextResponse.redirect(authenticatedUrl);
+  } catch (error) {
+    console.error('Content redirect error:', error);
+    return NextResponse.json(
+      { error: 'Failed to redirect to content: ' + (error as Error).message },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * Get available stores
+ */
+export async function handleGetStores(): Promise<NextResponse> {
+  try {
+    const client = await getAlfrescoClient();
+    const stores = await client.getStores();
+    return NextResponse.json(stores);
+  } catch (error) {
+    console.error('Failed to get stores:', error);
+    return NextResponse.json(
+      { error: 'Failed to get stores: ' + (error as Error).message },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * Search for content
+ */
+export async function handleSearch(searchTerm: string, includeMetaData: boolean = false): Promise<NextResponse> {
+  try {
+    const client = await getAlfrescoClient();
+    const results = await client.search(searchTerm, includeMetaData);
+    return NextResponse.json(results);
+  } catch (error) {
+    console.error('Search failed:', error);
+    return NextResponse.json(
+      { error: 'Search failed: ' + (error as Error).message },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * Get node details
+ */
+export async function handleGetNode(nodeRef: string): Promise<NextResponse> {
+  try {
+    const client = await getAlfrescoClient();
+    const node = await client.getNode(nodeRef);
+    return NextResponse.json(node);
+  } catch (error) {
+    console.error('Failed to get node:', error);
+    return NextResponse.json(
+      { error: 'Failed to get node: ' + (error as Error).message },
+      { status: 500 }
+    );
+  }
+}
+```
+
+### Direct Usage in Server Components
+
+```typescript
+// In a React Server Component
+import { AlfrescoClient } from 'alfresco-soap-api';
+
+export default async function DocumentList() {
   const client = new AlfrescoClient({
     url: process.env.ALFRESCO_URL!,
     username: process.env.ALFRESCO_USERNAME!,
     password: process.env.ALFRESCO_PASSWORD!,
-    scheme: 'workspace',
-    address: 'SpacesStore',
   });
-  const companyHome = await getCompanyHome(client);
-  return NextResponse.json(companyHome);
+
+  const companyHome = await client.getCompanyHome();
+  const documents = await client.getChildren(companyHome.nodeRef);
+
+  return (
+    <div>
+      <h1>{companyHome.name}</h1>
+      {documents.map(doc => (
+        <div key={doc.nodeRef}>
+          <h3>{doc.name}</h3>
+          <p>Type: {doc.type}</p>
+        </div>
+      ))}
+    </div>
+  );
 }
 ```
 
-### File Content Retrieval (Next.js API Route)
+### Frontend Integration
 
-```ts
-// app/api/content/route.ts
-import { NextRequest, NextResponse } from 'next/server';
-import { AlfrescoClient, getFileContent } from 'alfresco-soap-api';
+```typescript
+// Use the exported handlers directly in your application
+
+import { 
+  handleGetCompanyHome, 
+  handleGetChildren, 
+  handleSearch,
+  handleContentRedirect,
+  handleGetStores 
+} from './api/alfresco/route';
+
+// Get company home
+const companyHomeResponse = await handleGetCompanyHome();
+const companyHome = await companyHomeResponse.json();
+
+// Get children of a node
+const childrenResponse = await handleGetChildren(nodeRef);
+const children = await childrenResponse.json();
+
+// Search for content
+const searchResponse = await handleSearch('TYPE:"cm:content"');
+const results = await searchResponse.json();
+
+// Get stores
+const storesResponse = await handleGetStores();
+const stores = await storesResponse.json();
+
+// For content download, you can create a simple endpoint:
+// app/api/download/route.ts
+import { NextRequest } from 'next/server';
+import { handleContentRedirect } from '../alfresco/route';
 
 export async function GET(req: NextRequest) {
   const nodeRef = req.nextUrl.searchParams.get('nodeRef');
@@ -59,301 +306,206 @@ export async function GET(req: NextRequest) {
   if (!nodeRef) {
     return NextResponse.json({ error: 'Missing nodeRef' }, { status: 400 });
   }
+  
+  return handleContentRedirect(nodeRef, download);
+}
+```
 
-  try {
-    const client = new AlfrescoClient({
-      url: process.env.ALFRESCO_URL!,
-      username: process.env.ALFRESCO_USERNAME!,
-      password: process.env.ALFRESCO_PASSWORD!,
-      scheme: 'workspace',
-      address: 'SpacesStore',
-    });
+## Configuration
 
-    // Get file content using SOAP + HTTP approach
-    const contentData = await getFileContent(client, nodeRef);
-    
-    const headers = new Headers({
-      'Content-Type': download ? 'application/octet-stream' : contentData.contentType,
-      'Content-Length': contentData.size.toString(),
-    });
+### Environment Variables
 
-    if (download) {
-      headers.set('Content-Disposition', `attachment; filename="${contentData.filename}"`);
-    }
+```env
+# Required
+ALFRESCO_URL=http://your-alfresco-server:8080
+ALFRESCO_USERNAME=admin
+ALFRESCO_PASSWORD=admin
 
-    return new NextResponse(contentData.buffer, { headers });
+# Optional (with defaults)
+ALFRESCO_SCHEME=workspace    # Default: workspace
+ALFRESCO_ADDRESS=SpacesStore # Default: SpacesStore
+```
 
-  } catch (error) {
-    return NextResponse.json(
-      { error: 'Failed to get file content: ' + (error as Error).message }, 
-      { status: 500 }
-    );
+### Configuration Interface
+
+```typescript
+interface AlfrescoClientConfig {
+  url: string;           // Required: Alfresco server URL
+  username: string;      // Required: Username
+  password: string;      // Required: Password  
+  scheme?: string;       // Optional: Store scheme (default: 'workspace')
+  address?: string;      // Optional: Store address (default: 'SpacesStore')
+}
+```
+
+## Advanced Usage
+
+### Custom Queries
+
+```typescript
+// Lucene query
+const results = await client.query({
+  language: 'lucene',
+  statement: 'PATH:"/app:company_home/*" AND TYPE:"cm:content"'
+}, true); // includeMetaData
+
+// XPath query
+const results = await client.query({
+  language: 'xpath',
+  statement: '/app:company_home/cm:*[@cm:name="Documents"]'
+});
+
+// Simple search
+const docs = await client.search('TYPE:"cm:content" AND @cm:name:"*.pdf"');
+```
+
+### Content Management
+
+```typescript
+// Read content metadata
+const content = await client.readContent(nodeRef);
+
+// Write content
+await client.writeContent(nodeRef, 'Hello World', undefined, {
+  mimetype: 'text/plain',
+  encoding: 'UTF-8'
+});
+
+// Get authenticated download URL
+const downloadUrl = await client.getDownloadUrl(nodeRef);
+// URL includes proper authentication ticket
+
+// Clear content
+await client.clearContent(nodeRef);
+```
+
+### Working with Content URLs
+
+```typescript
+// Get download URL with authentication
+const downloadUrl = await client.getDownloadUrl(nodeRef);
+// Returns: http://server:8080/alfresco/d/d/workspace/SpacesStore/uuid/filename
+
+// For downloads (attachment), modify URL pattern:
+if (downloadUrl.includes('/d/d/')) {
+  const attachmentUrl = downloadUrl.replace('/d/d/', '/d/a/');
+  // Now forces download instead of display
+}
+
+// URL already includes alf_ticket for authentication
+```
+
+### Error Handling
+
+```typescript
+try {
+  const children = await client.getChildren(nodeRef);
+  console.log(`Found ${children.length} children`);
+} catch (error) {
+  if (error.message.includes('not found')) {
+    console.log('Node does not exist');
+  } else if (error.message.includes('permission')) {
+    console.log('Access denied');
+  } else {
+    console.error('Unexpected error:', error.message);
   }
 }
 ```
 
-## API Reference
+## Examples
 
-### Core Functions
-- `AlfrescoClient(config)` — Create a new client instance
-- `getCompanyHome(client)` — Get the Company Home node. Returns `{ nodeRef, name }`
-- `getChildren(client, nodeRef)` — Get children of a node using native SOAP `queryChildren`
-- `getFileContent(client, nodeRef)` — Download file content using SOAP + HTTP approach
-- `authenticate(client)` — Authenticate and get a ticket
+### File Browser Using Handler Functions
 
-### TypeScript Interfaces
+```typescript
+// app/api/browse/route.ts
+import { NextRequest, NextResponse } from 'next/server';
+import { handleGetCompanyHome, handleGetChildren, handleSearch } from '../alfresco/route';
 
-```ts
-interface ContentData {
-  buffer: Buffer;        // File content as Buffer
-  filename: string;      // Original filename from Alfresco
-  contentType: string;   // MIME type (e.g., 'application/pdf')
-  size: number;         // File size in bytes
-}
-
-interface AlfrescoClientConfig {
-  url: string;           // Alfresco server URL
-  username: string;      // Username for authentication
-  password: string;      // Password for authentication
-  scheme: string;        // Store scheme (usually 'workspace')
-  address: string;       // Store address (usually 'SpacesStore')
-}
-```
-
-## How Content Retrieval Works
-
-The `getFileContent` function uses **Alfresco's by-design hybrid SOAP+HTTP approach**:
-
-### Step 1: SOAP ContentService.read
-```ts
-// Uses exact WSDL operation to get Content object with download URL
-const result = await contentService.read(nodeRef, property);
-// Extract download URL from Content object (e.g., "/alfresco/d/a/workspace/SpacesStore/uuid/filename")
-const downloadUrl = result.content[0].url;
-```
-
-### Step 2: Authenticated HTTP Download
-```ts
-// Convert to absolute URL and add SOAP session authentication
-const fullUrl = `${baseUrl}${downloadUrl}?alf_ticket=${soapTicket}`;
-
-// Download content via Alfresco's download servlet
-const response = await fetch(fullUrl);
-const fileContent = Buffer.from(await response.arrayBuffer());
-```
-
-### Why This Approach Works
-1. **Uses exact WSDL operations** - follows Alfresco's official ContentService specification
-2. **Alfresco's intended design** - ContentService.read returns URLs, not embedded content
-3. **Proper SOAP session authentication** - uses the same ticket from SOAP authentication
-4. **Download servlet integration** - uses Alfresco's `/d/a/` and `/d/d/` download paths
-5. **Reliable across versions** - follows Alfresco's documented hybrid architecture
-
-## Content Service Operations
-
-The ContentService provides these WSDL-compliant operations:
-
-### Reading Content
-```ts
-// Get Content object with download URL (via SOAP)
-const contentInfo = await client.contentService.read(nodeRef, property);
-
-// High-level file download (hybrid SOAP+HTTP)
-const fileData = await getFileContent(client, nodeRef);
-```
-
-### Writing Content
-```ts
-await client.contentService.write(nodeRef, content, property, format);
-```
-
-### Clearing Content
-```ts
-await client.contentService.clear(nodeRef, property);
-```
-
-### Transforming Content
-```ts
-await client.contentService.transform(
-  sourceNodeRef, 
-  property, 
-  targetNodeRef, 
-  targetProperty, 
-  targetFormat
-);
-```
-
-## Usage Examples
-
-### Download File to File System
-```ts
-import fs from 'fs';
-import { AlfrescoClient, getFileContent } from 'alfresco-soap-api';
-
-const client = new AlfrescoClient(config);
-const contentData = await getFileContent(client, nodeRef);
-
-// Save to file system
-fs.writeFileSync(`./downloads/${contentData.filename}`, contentData.buffer);
-console.log(`Downloaded: ${contentData.filename} (${contentData.size} bytes)`);
-```
-
-### Stream Content to Browser
-```ts
-// Next.js API route
 export async function GET(req: NextRequest) {
   const nodeRef = req.nextUrl.searchParams.get('nodeRef');
-  const client = new AlfrescoClient(config);
-  
-  const contentData = await getFileContent(client, nodeRef);
-  
-  return new NextResponse(contentData.buffer, {
-    headers: {
-      'Content-Type': contentData.contentType,
-      'Content-Disposition': `attachment; filename="${contentData.filename}"`
-    }
-  });
-}
-```
+  const searchTerm = req.nextUrl.searchParams.get('search');
 
-### Batch File Processing
-```ts
-import { AlfrescoClient, getChildren, getFileContent } from 'alfresco-soap-api';
-
-async function downloadFolder(client: AlfrescoClient, folderNodeRef: string) {
-  const children = await getChildren(client, folderNodeRef);
-  
-  for (const child of children) {
-    if (child.type === 'cm:content') {
-      try {
-        const contentData = await getFileContent(client, child.nodeRef);
-        
-        // Process file
-        console.log(`Processing: ${contentData.filename}`);
-        fs.writeFileSync(`./output/${contentData.filename}`, contentData.buffer);
-        
-      } catch (error) {
-        console.error(`Failed to download ${child.name}:`, error);
-      }
-    }
+  // If searching, use search handler
+  if (searchTerm) {
+    return handleSearch(searchTerm);
   }
+
+  // If nodeRef provided, get its children
+  if (nodeRef) {
+    return handleGetChildren(nodeRef);
+  }
+
+  // Otherwise, return company home
+  return handleGetCompanyHome();
 }
 ```
 
-## WSDL Compliance
+### Custom Content Information
 
-This library strictly follows the official Alfresco SOAP WSDL specifications:
+```typescript
+// app/page.tsx - Server Component
+import { getAlfrescoClient } from './api/alfresco/route';
 
-### RepositoryService Operations
-- `query` - Execute Lucene queries
-- `queryChildren` - Get folder children
-- `queryParents` - Get parent nodes  
-- `get` - Retrieve individual nodes
+export default async function DocumentsPage() {
+  const client = await getAlfrescoClient();
+  
+  // Get company home and its children
+  const companyHome = await client.getCompanyHome();
+  const documents = await client.getChildren(companyHome.nodeRef);
 
-### ContentService Operations
-- `read` - Get Content objects with download URLs
-- `write` - Write content to repository
-- `clear` - Clear content from nodes
-- `transform` - Transform content between formats
-
-### Parameter Formatting
-All SOAP calls use the exact parameter structure specified in the WSDL:
-```ts
-// RepositoryService calls
-{ nodes: [{ store: { scheme, address }, uuid: id }] }
-
-// ContentService calls  
-{ items: { nodes: [{ store: { scheme, address }, uuid: id }] }, property: propertyName }
+  return (
+    <div>
+      <h1>{companyHome.name}</h1>
+      {documents.map(doc => (
+        <div key={doc.nodeRef}>
+          <h3>{doc.name}</h3>
+          <p>Type: {doc.type}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
 ```
 
-## Troubleshooting
+### Download Endpoint
 
-### Content Retrieval Issues
+```typescript
+// app/api/download/route.ts
+import { NextRequest, NextResponse } from 'next/server';
+import { handleContentRedirect } from '../alfresco/route';
 
-#### "No URL found in Content object"
-**Cause**: ContentService.read didn't return a Content object with a URL field
-**Solution**: 
-1. Verify the nodeRef has content (not just metadata)
-2. Check user permissions for content access
-3. Ensure the node is a file (cm:content) not a folder
+export async function GET(req: NextRequest) {
+  const nodeRef = req.nextUrl.searchParams.get('nodeRef');
+  const download = req.nextUrl.searchParams.get('download') === 'true';
+  
+  if (!nodeRef) {
+    return NextResponse.json({ error: 'Missing nodeRef' }, { status: 400 });
+  }
+  
+  return handleContentRedirect(nodeRef, download);
+}
+```
 
-#### "Download URL returned login page"
-**Cause**: The download URL authentication failed using SOAP session ticket
-**Fixed**: The library now uses the correct hybrid SOAP+HTTP approach with proper session authentication
-**If still failing**:
-1. Verify the SOAP ticket is valid: `await client.authenticate()`
-2. Check user permissions for the specific content
-3. Ensure the nodeRef exists and has content
-4. Verify your Alfresco server URL configuration matches the returned download URLs
+## TypeScript Support
 
-#### "Body has already been read" / "Body is unusable"
-**Cause**: HTTP response body consumption conflict in authentication retry logic
-**Fixed**: Library now properly manages response body consumption during authentication attempts
-**This error has been resolved in v1.2.5+**
+The library includes full TypeScript definitions:
 
-#### "HTTP 404: Not Found"
-**Cause**: The download URL is invalid or content doesn't exist
-**Solution**:
-1. Verify the nodeRef is correct and points to a file
-2. Check if the content was moved or deleted
-3. Ensure the content store is accessible
+```typescript
+import { AlfrescoClient, NodeRef, StoreRef, AlfrescoClientConfig } from 'alfresco-soap-api';
 
-### Repository Navigation Issues
-
-#### "Node not found" errors
-**Solution**: Verify the nodeRef exists and user has read permissions
-
-#### "Empty results" from getChildren
-**Solution**: Check user permissions and verify the nodeRef is a folder
-
-#### SOAP method errors
-**Solution**: Verify your Alfresco server's SOAP API is enabled and accessible
-
-### General Issues
-
-#### Authentication failures
-**Solution**: Verify your credentials and network connectivity to Alfresco
-
-#### Permission errors  
-**Solution**: Ensure the user account has appropriate access to folders and content
-
-## Example Project
-
-A complete Next.js example is provided in the [`nextjs-example`](../nextjs-example) folder:
-
-- Full-stack Alfresco browser with file download
-- Demonstrates all library features
-- See [`nextjs-example/README.md`](../nextjs-example/README.md) for setup instructions
-
-## Architecture
-
-### Consistent Design Patterns
-Both RepositoryService and ContentService follow the same patterns:
-- **Same authentication method** (WS-Security with tickets)
-- **Same parameter formatting** (proper Predicate structures)
-- **Same error handling** approach
-- **Same response normalization**
-
-### WSDL-First Approach
-- Uses only operations defined in official Alfresco WSDLs
-- No custom workarounds or reverse-engineered methods
-- Parameters match WSDL specifications exactly
-- Responses are properly typed and normalized
-
-### Why This Architecture Works
-1. **Predictable behavior** across all Alfresco versions
-2. **Easy to maintain** - follows official specifications
-3. **Reliable** - uses Alfresco's intended hybrid SOAP+HTTP architecture
-4. **Authentic** - uses the same authentication mechanisms as Alfresco's web interface
-5. **Extensible** - easy to add new WSDL-compliant operations
+// All methods are fully typed
+const client: AlfrescoClient = new AlfrescoClient(config);
+const nodeRef: NodeRef = 'workspace://SpacesStore/uuid';
+const children: any[] = await client.getChildren(nodeRef);
+```
 
 ## Notes
-- This package is **Node.js only**. Do not import it in browser code.
-- Use in Next.js API routes, Express, or any Node.js backend.
-- All methods return normalized, developer-friendly data structures.
-- Content retrieval uses **Alfresco's hybrid SOAP+HTTP approach**: SOAP for URLs, HTTP for downloads.
-- **Proper authentication**: Uses SOAP session tickets for download servlet authentication.
-- All SOAP operations strictly follow the official Alfresco WSDL specifications.
+
+- **Node.js Only**: This package is for server-side use only (Next.js API routes, Express, etc.)
+- **Authentication**: All methods automatically handle SOAP authentication
+- **Session Management**: Client manages SOAP tickets internally
+- **Error Handling**: Methods throw descriptive errors for debugging
+- **Performance**: Client reuses SOAP connections for efficiency
 
 ## License
 
