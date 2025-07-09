@@ -178,18 +178,17 @@ export class ContentService extends SoapService {
           if (!response.ok) {
             console.log(`[ContentService] ${authMethod.name} failed: HTTP ${response.status}: ${response.statusText}`);
             lastError = `HTTP ${response.status}: ${response.statusText}`;
+            response = null; // Reset for next attempt
             continue;
           }
 
-          // Check if we got HTML (login page) instead of binary content
+          // Check if we got HTML (login page) by looking at headers first
           const responseContentType = response.headers.get('content-type') || '';
           if (responseContentType.includes('text/html')) {
-            const htmlContent = await response.text();
-            if (htmlContent.includes('<html') || htmlContent.includes('login')) {
-              console.log(`[ContentService] ${authMethod.name} returned HTML (login page) - authentication failed`);
-              lastError = 'Download URL returned login page - authentication failed';
-              continue;
-            }
+            console.log(`[ContentService] ${authMethod.name} returned HTML content-type - likely login page`);
+            lastError = 'Download URL returned HTML - likely login page';
+            response = null; // Reset for next attempt
+            continue;
           }
 
           console.log(`[ContentService] ${authMethod.name} successful`);
@@ -198,6 +197,7 @@ export class ContentService extends SoapService {
         } catch (error) {
           console.log(`[ContentService] ${authMethod.name} error: ${(error as Error).message}`);
           lastError = (error as Error).message;
+          response = null; // Reset for next attempt
           continue;
         }
       }

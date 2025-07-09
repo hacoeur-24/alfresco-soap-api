@@ -293,6 +293,11 @@ All SOAP calls use the exact parameter structure specified in the WSDL:
 3. Ensure the nodeRef exists and has content
 4. Check if your Alfresco instance requires specific authentication headers
 
+#### "Body has already been read" / "Body is unusable"
+**Cause**: HTTP response body consumption conflict in authentication retry logic
+**Fixed**: Library now properly manages response body consumption during authentication attempts
+**This error has been resolved in v1.2.5+**
+
 #### "HTTP 404: Not Found"
 **Cause**: The download URL is invalid or content doesn't exist
 **Solution**:
