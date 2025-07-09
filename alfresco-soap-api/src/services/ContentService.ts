@@ -52,9 +52,9 @@ export class ContentService extends SoapService {
   /**
    * Get file content using SOAP + HTTP approach (robust for older Alfresco)
    * Step 1: Use SOAP read to get Content object with download URL
-   * Step 2: Fetch content via the URL provided by Alfresco
+   * Step 2: Fetch content via the URL provided by Alfresco with proper authentication
    */
-  async getFileContent(nodeRef: string, repositoryService: any): Promise<ContentData> {
+  async getFileContent(nodeRef: string, repositoryService: any, ticket: string, baseUrl: string): Promise<ContentData> {
     try {
       console.log(`[ContentService] Starting content retrieval for nodeRef: ${nodeRef}`);
 
@@ -130,27 +130,80 @@ export class ContentService extends SoapService {
         throw new Error('No URL found in Content object - cannot download content');
       }
 
-      // Step 4: Download content via the URL provided by Alfresco
+      // Step 4: Download content via the URL provided by Alfresco with authentication
       console.log(`[ContentService] Downloading content from URL: ${downloadUrl}`);
-      const response = await fetch(downloadUrl, {
-        method: 'GET',
-        headers: {
-          'User-Agent': 'Alfresco-SOAP-API-Client',
-          'Accept': '*/*'
+      
+      // Try multiple authentication methods for the download URL
+      const authMethods = [
+        // Method 1: Add alf_ticket parameter to URL
+        {
+          name: 'URL_TICKET',
+          url: downloadUrl.includes('?') 
+            ? `${downloadUrl}&alf_ticket=${encodeURIComponent(ticket)}`
+            : `${downloadUrl}?alf_ticket=${encodeURIComponent(ticket)}`,
+          headers: {}
+        },
+        // Method 2: Use ticket in Authorization header
+        {
+          name: 'AUTH_HEADER',
+          url: downloadUrl,
+          headers: { 'Authorization': `Basic ${Buffer.from(`${ticket}:`).toString('base64')}` }
+        },
+        // Method 3: Use the original URL as-is (in case it's already authenticated)
+        {
+          name: 'ORIGINAL_URL',
+          url: downloadUrl,
+          headers: {}
         }
-      });
+      ];
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText} - Failed to download from ${downloadUrl}`);
+      let response: Response | null = null;
+      let lastError: string = '';
+
+      for (const authMethod of authMethods) {
+        try {
+          console.log(`[ContentService] Trying ${authMethod.name}: ${authMethod.url.replace(ticket, 'TICKET_HIDDEN')}`);
+          
+          const headers: Record<string, string> = {
+            'User-Agent': 'Alfresco-SOAP-API-Client',
+            'Accept': '*/*'
+          };
+          Object.assign(headers, authMethod.headers);
+
+          response = await fetch(authMethod.url, {
+            method: 'GET',
+            headers
+          });
+
+          if (!response.ok) {
+            console.log(`[ContentService] ${authMethod.name} failed: HTTP ${response.status}: ${response.statusText}`);
+            lastError = `HTTP ${response.status}: ${response.statusText}`;
+            continue;
+          }
+
+          // Check if we got HTML (login page) instead of binary content
+          const responseContentType = response.headers.get('content-type') || '';
+          if (responseContentType.includes('text/html')) {
+            const htmlContent = await response.text();
+            if (htmlContent.includes('<html') || htmlContent.includes('login')) {
+              console.log(`[ContentService] ${authMethod.name} returned HTML (login page) - authentication failed`);
+              lastError = 'Download URL returned login page - authentication failed';
+              continue;
+            }
+          }
+
+          console.log(`[ContentService] ${authMethod.name} successful`);
+          break; // Success! Exit the loop
+
+        } catch (error) {
+          console.log(`[ContentService] ${authMethod.name} error: ${(error as Error).message}`);
+          lastError = (error as Error).message;
+          continue;
+        }
       }
 
-      // Check if we got HTML (login page) instead of binary content
-      const responseContentType = response.headers.get('content-type') || '';
-      if (responseContentType.includes('text/html')) {
-        const htmlContent = await response.text();
-        if (htmlContent.includes('<html') || htmlContent.includes('login')) {
-          throw new Error('Download URL returned login page - authentication may have failed or URL may be invalid');
-        }
+      if (!response || !response.ok) {
+        throw new Error(`All authentication methods failed. Last error: ${lastError}`);
       }
 
       const arrayBuffer = await response.arrayBuffer();
